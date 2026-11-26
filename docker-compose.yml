@@ -17,5 +17,36 @@ services:
       timeout: 3s
       retries: 30
 
+  runtime:
+    build:
+      context: .
+      dockerfile: apps/runtime/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgres://errata:errata@db:5432/errata
+      APP_BASE_URL: http://localhost:3000
+      NODE_ENV: ${ERRATA_NODE_ENV:-development}
+    volumes:
+      - errata-storage:/srv/storage
+      - ${HOME}/.mozaik:/home/node/.mozaik:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        RUNTIME_INTERNAL_URL: http://runtime:4000
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      runtime:
+        condition: service_healthy
+
 volumes:
   errata-db:
+  errata-storage:
