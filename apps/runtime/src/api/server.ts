@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import { and, asc, count, desc, eq, gt, gte } from "drizzle-orm";
@@ -88,7 +91,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   app.get("/api/v1/ready", async (_request, reply) => {
     await sqlClient`select 1`;
     const migrations = await sqlClient`select count(*)::int as n from drizzle.__drizzle_migrations`;
-    return ok(reply, { database: "ok", migrations: migrations[0]?.n ?? 0, model: { provider: ENV.MODEL_PROVIDER, id: ENV.MODEL_ID, configured: Boolean(process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY) }, mozaikCloud: Boolean(process.env.MOZAIK_API_KEY || process.env.MOZAIK_PROJECT_KEY), liveMonitor: ENV.ENABLE_LIVE_MONITOR, build: ENV.BUILD_COMMIT });
+    return ok(reply, { database: "ok", migrations: migrations[0]?.n ?? 0, model: { provider: ENV.MODEL_PROVIDER, id: ENV.MODEL_ID, configured: Boolean(ENV.MODEL_PROVIDER === "anthropic" ? process.env.ANTHROPIC_API_KEY : ENV.MODEL_PROVIDER === "openai" ? process.env.OPENAI_API_KEY : process.env.GEMINI_API_KEY) }, mozaikCloud: Boolean(process.env.MOZAIK_API_KEY || process.env.MOZAIK_PROJECT_KEY) || existsSync(process.env.MOZAIK_CREDENTIALS_FILE ?? join(homedir(), ".mozaik", "credentials.json")), liveMonitor: ENV.ENABLE_LIVE_MONITOR, build: ENV.BUILD_COMMIT });
   });
 
   app.get("/api/v1/scenarios", async (_request, reply) => {

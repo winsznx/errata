@@ -38,6 +38,7 @@ import { serializeEvent } from "../domain/events.js";
 import { evaluateCandidate } from "../domain/publication.js";
 import { loadScenario } from "../domain/scenarios.js";
 import { readExcerpt } from "../domain/reads.js";
+import { recipientToken } from "../domain/workspace.js";
 
 export function pageArgs(query: { cursor?: string; limit?: string }) {
   const limit = Math.min(100, Math.max(1, Number(query.limit ?? 25) || 25));
@@ -315,7 +316,7 @@ export async function distributionView(workspaceId: string) {
   const rows = await db.select({ delivery, recipient: syntheticRecipient }).from(delivery).innerJoin(syntheticRecipient, eq(syntheticRecipient.id, delivery.recipientId)).where(eq(delivery.workspaceId, workspaceId)).orderBy(desc(delivery.createdAt));
   const subscriptions = await db.select({ pr: publicationRecipient, title: researchReport.title }).from(publicationRecipient).innerJoin(researchReport, eq(researchReport.id, publicationRecipient.reportId)).where(eq(researchReport.workspaceId, workspaceId));
   return {
-    recipients: recipients.map((r) => ({ id: r.id, displayName: r.displayName, organisation: r.organisation, address: r.address, subscriptions: subscriptions.filter((s) => s.pr.recipientId === r.id).map((s) => s.title) })),
+    recipients: recipients.map((r) => ({ id: r.id, inboxPath: `/demo/inbox/${recipientToken(r.id)}`, displayName: r.displayName, organisation: r.organisation, address: r.address, subscriptions: subscriptions.filter((s) => s.pr.recipientId === r.id).map((s) => s.title) })),
     deliveries: rows.map(({ delivery: d, recipient }) => ({ id: d.id, kind: d.kind, subject: d.subject, status: d.status, attempts: d.attemptCount, deliveredAt: d.deliveredAt?.toISOString() ?? null, lastError: d.lastError, recipient: recipient.displayName, recipientId: recipient.id, noticeId: d.noticeId, revisionId: d.revisionId, createdAt: d.createdAt.toISOString() })),
   };
 }
