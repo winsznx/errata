@@ -12,5 +12,8 @@
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "errata": "pnpm --filter @errata/runtime cli"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1"
   }
 }

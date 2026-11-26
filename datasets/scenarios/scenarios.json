@@ -7,29 +7,73 @@
       "description": "A synthetic liquidity note built on Nocera's original Q1 2025 10-Q. Nocera later filed an Item 4.02 non-reliance 8-K and, eleven days after that, a 10-K/A with the restated Q1 2025 balance sheet. The workspace also holds an unrelated Joint Corp. note and a roundup that only mentions Nocera.",
       "mode": "replay",
       "initialAsOf": "2025-06-01T00:00:00Z",
-      "preloadedSources": ["nocera-10q-q1-2025", "nocera-8k-2025-402", "joint-10q-q1-2025"],
-      "events": [
-        { "id": "notice", "sourceRef": "nocera-8k-2026-402", "label": "Nocera files an Item 4.02 non-reliance 8-K" },
-        { "id": "amendment", "sourceRef": "nocera-10ka2-fy2025", "label": "Nocera files 10-K/A No. 2 with restated quarterly balance sheets" }
+      "preloadedSources": [
+        "nocera-10q-q1-2025",
+        "nocera-8k-2025-402",
+        "joint-10q-q1-2025"
       ],
-      "reports": ["nocera-liquidity", "joint-snapshot", "roundup"],
-      "watchlist": ["0001756180", "0001612630"],
+      "events": [
+        {
+          "id": "notice",
+          "sourceRef": "nocera-8k-2026-402",
+          "label": "Nocera files an Item 4.02 non-reliance 8-K"
+        },
+        {
+          "id": "amendment",
+          "sourceRef": "nocera-10ka2-fy2025",
+          "label": "Nocera files 10-K/A No. 2 with restated quarterly balance sheets"
+        }
+      ],
+      "reports": [
+        "nocera-liquidity",
+        "joint-snapshot",
+        "roundup"
+      ],
+      "watchlist": [
+        "0001756180",
+        "0001612630"
+      ],
       "faults": []
     },
     {
       "id": "nocera-q1-stale-evidence",
       "label": "J3 New evidence while agents are working",
-      "description": "Same public filings as J1. The amendment is released while agents are still working on the non-reliance notice. A labelled scheduling control holds one epoch 1 result until after the amendment so the stale write is attempted deterministically.",
+      "description": "Same public filings as J1. The amendment is released while agents are still working on the non-reliance notice. A labelled scheduling control holds one epoch 1 write from the Impact Analyst until after the amendment, so the stale write is attempted deterministically and must be rejected.",
       "mode": "replay",
       "initialAsOf": "2025-06-01T00:00:00Z",
-      "preloadedSources": ["nocera-10q-q1-2025", "nocera-8k-2025-402", "joint-10q-q1-2025"],
-      "events": [
-        { "id": "notice", "sourceRef": "nocera-8k-2026-402", "label": "Nocera files an Item 4.02 non-reliance 8-K" },
-        { "id": "amendment", "sourceRef": "nocera-10ka2-fy2025", "label": "Nocera files 10-K/A No. 2 with restated quarterly balance sheets" }
+      "preloadedSources": [
+        "nocera-10q-q1-2025",
+        "nocera-8k-2025-402",
+        "joint-10q-q1-2025"
       ],
-      "reports": ["nocera-liquidity", "joint-snapshot"],
-      "watchlist": ["0001756180"],
-      "faults": [{ "type": "hold_stale_commit", "role": "impact-analyst", "epoch": 1, "label": "Scheduling control: hold one epoch 1 commit until the amendment lands" }]
+      "events": [
+        {
+          "id": "notice",
+          "sourceRef": "nocera-8k-2026-402",
+          "label": "Nocera files an Item 4.02 non-reliance 8-K"
+        },
+        {
+          "id": "amendment",
+          "sourceRef": "nocera-10ka2-fy2025",
+          "label": "Nocera files 10-K/A No. 2 with restated quarterly balance sheets"
+        }
+      ],
+      "reports": [
+        "nocera-liquidity",
+        "joint-snapshot",
+        "roundup"
+      ],
+      "watchlist": [
+        "0001756180"
+      ],
+      "faults": [
+        {
+          "type": "hold_stale_commit",
+          "role": "impact-analyst",
+          "epoch": 1,
+          "label": "Scheduling control: hold one epoch 1 commit until the amendment lands"
+        }
+      ]
     },
     {
       "id": "nocera-q1-conflict",
@@ -37,16 +81,39 @@
       "description": "Same public filings as J1. A labelled fault injects a replacement that cites the wrong period, and the verifier's first model call is forced to time out. The warning must stay, release must be blocked, and a retry must succeed on valid evidence.",
       "mode": "replay",
       "initialAsOf": "2025-06-01T00:00:00Z",
-      "preloadedSources": ["nocera-10q-q1-2025", "nocera-8k-2025-402"],
-      "events": [
-        { "id": "notice", "sourceRef": "nocera-8k-2026-402", "label": "Nocera files an Item 4.02 non-reliance 8-K" },
-        { "id": "amendment", "sourceRef": "nocera-10ka2-fy2025", "label": "Nocera files 10-K/A No. 2 with restated quarterly balance sheets" }
+      "preloadedSources": [
+        "nocera-10q-q1-2025",
+        "nocera-8k-2025-402"
       ],
-      "reports": ["nocera-liquidity"],
-      "watchlist": ["0001756180"],
+      "events": [
+        {
+          "id": "notice",
+          "sourceRef": "nocera-8k-2026-402",
+          "label": "Nocera files an Item 4.02 non-reliance 8-K"
+        },
+        {
+          "id": "amendment",
+          "sourceRef": "nocera-10ka2-fy2025",
+          "label": "Nocera files 10-K/A No. 2 with restated quarterly balance sheets"
+        }
+      ],
+      "reports": [
+        "nocera-liquidity"
+      ],
+      "watchlist": [
+        "0001756180"
+      ],
       "faults": [
-        { "type": "inject_wrong_period_proposal", "role": "impact-analyst", "label": "Fault injection: a replacement citing the June 30, 2025 column" },
-        { "type": "verifier_timeout_once", "role": "financial-verifier", "label": "Fault injection: first verifier model call times out" }
+        {
+          "type": "inject_wrong_period_proposal",
+          "role": "impact-analyst",
+          "label": "Fault injection: a replacement citing the June 30, 2025 column"
+        },
+        {
+          "type": "verifier_timeout_once",
+          "role": "financial-verifier",
+          "label": "Fault injection: first verifier model call times out"
+        }
       ]
     },
     {
@@ -55,13 +122,27 @@
       "description": "A synthetic note on Xencor's original Q1 2024 10-Q (figures in thousands). Xencor filed an Item 4.02 8-K in February 2025 and a 10-Q/A eleven days later with restatement members tagged in inline XBRL.",
       "mode": "replay",
       "initialAsOf": "2024-06-01T00:00:00Z",
-      "preloadedSources": ["xencor-10q-q1-2024"],
-      "events": [
-        { "id": "notice", "sourceRef": "xencor-8k-2025-402", "label": "Xencor files an Item 4.02 non-reliance 8-K" },
-        { "id": "amendment", "sourceRef": "xencor-10qa-q1-2024", "label": "Xencor files a 10-Q/A for Q1 2024" }
+      "preloadedSources": [
+        "xencor-10q-q1-2024"
       ],
-      "reports": ["xencor-liquidity"],
-      "watchlist": ["0001326732"],
+      "events": [
+        {
+          "id": "notice",
+          "sourceRef": "xencor-8k-2025-402",
+          "label": "Xencor files an Item 4.02 non-reliance 8-K"
+        },
+        {
+          "id": "amendment",
+          "sourceRef": "xencor-10qa-q1-2024",
+          "label": "Xencor files a 10-Q/A for Q1 2024"
+        }
+      ],
+      "reports": [
+        "xencor-liquidity"
+      ],
+      "watchlist": [
+        "0001326732"
+      ],
       "faults": []
     },
     {
@@ -70,13 +151,27 @@
       "description": "A synthetic balance sheet snapshot on The Joint Corp.'s original Q1 2025 10-Q. The later 10-Q/A restates current assets but not current liabilities, so one figure must be verified as unchanged rather than replaced.",
       "mode": "replay",
       "initialAsOf": "2025-06-01T00:00:00Z",
-      "preloadedSources": ["joint-10q-q1-2025"],
-      "events": [
-        { "id": "notice", "sourceRef": "joint-8k-2025-402", "label": "The Joint Corp. files an Item 4.02 non-reliance 8-K" },
-        { "id": "amendment", "sourceRef": "joint-10qa-q1-2025", "label": "The Joint Corp. files a 10-Q/A for Q1 2025" }
+      "preloadedSources": [
+        "joint-10q-q1-2025"
       ],
-      "reports": ["joint-snapshot"],
-      "watchlist": ["0001612630"],
+      "events": [
+        {
+          "id": "notice",
+          "sourceRef": "joint-8k-2025-402",
+          "label": "The Joint Corp. files an Item 4.02 non-reliance 8-K"
+        },
+        {
+          "id": "amendment",
+          "sourceRef": "joint-10qa-q1-2025",
+          "label": "The Joint Corp. files a 10-Q/A for Q1 2025"
+        }
+      ],
+      "reports": [
+        "joint-snapshot"
+      ],
+      "watchlist": [
+        "0001612630"
+      ],
       "faults": []
     }
   ]

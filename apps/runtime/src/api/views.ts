@@ -160,7 +160,10 @@ export async function reportDetail(workspaceId: string, reportId: string) {
     .innerJoin(correctionCase, eq(correctionCase.id, claimImpact.caseId))
     .where(eq(claimImpact.reportId, reportId));
   const current = report.currentRevisionId ? await revisionView(workspaceId, report.currentRevisionId, { includeInternal: true }) : null;
+  const impacts = current?.claims.length ? await db.select({ claimId: claimImpact.claimId, state: claimImpact.state, updatedAt: claimImpact.updatedAt }).from(claimImpact).where(inArray(claimImpact.claimId, current.claims.map((c) => c.id))).orderBy(asc(claimImpact.updatedAt)) : [];
+  const claimStates = Object.fromEntries(impacts.map((i) => [i.claimId, i.state]));
   return {
+    claimStates,
     report: reportRowView(report),
     current,
     versions: revisions.map((r) => ({ id: r.id, version: r.version, kind: r.kind, documentState: r.documentState, candidateState: r.candidateState, createdAt: r.createdAt.toISOString(), publishedAt: r.publishedAt?.toISOString() ?? null, createdBy: r.createdBy })),

@@ -201,6 +201,11 @@ export async function buildServer(): Promise<FastifyInstance> {
     return ok(reply, await excerptView(p.workspaceId, UUID.parse(request.query.locatorId)));
   });
 
+  app.get<{ Params: Params & { locatorId: string } }>(`${W}/locators/:locatorId`, async (request, reply) => {
+    const p = await requirePrincipal(request, request.params.workspaceId);
+    return ok(reply, await excerptView(p.workspaceId, UUID.parse(request.params.locatorId)));
+  });
+
   app.get<{ Params: Params; Querystring: { q?: string; status?: string; cursor?: string; limit?: string } }>(`${W}/reports`, async (request, reply) => {
     const p = await requirePrincipal(request, request.params.workspaceId);
     return ok(reply, await listReports(p.workspaceId, request.query));
@@ -367,11 +372,11 @@ export async function buildServer(): Promise<FastifyInstance> {
     return reply.header("content-type", "application/json").header("content-disposition", `attachment; filename="errata-trace-${p.workspaceSlug}.json"`).send(JSON.stringify(await traceExport(p.workspaceId), null, 2));
   });
 
-  app.get<{ Params: Params; Querystring: { ticket?: string } }>(`${W}/events`, async (request, reply) => {
+  app.get<{ Params: Params; Querystring: { ticket?: string; lastEventId?: string } }>(`${W}/events`, async (request, reply) => {
     const workspaceId = UUID.parse(request.params.workspaceId);
     const ticketOk = request.query.ticket ? verifyStreamTicket(request.query.ticket, workspaceId) : false;
     if (!ticketOk) await requirePrincipal(request, workspaceId);
-    const lastId = request.headers["last-event-id"];
+    const lastId = request.headers["last-event-id"] ?? (request.query as { lastEventId?: string }).lastEventId;
     const after = typeof lastId === "string" && /^\d+$/.test(lastId) ? BigInt(lastId) : null;
     reply.hijack();
     const res = reply.raw;
