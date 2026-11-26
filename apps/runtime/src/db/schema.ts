@@ -755,6 +755,7 @@ export const agentRun = pgTable(
     attempt: integer("attempt").notNull().default(1),
     status: agentRunState("status").notNull(),
     summary: text("summary"),
+    outcome: text("outcome"),
     errorCode: text("error_code"),
     errorMessage: text("error_message"),
     inputTokens: integer("input_tokens"),

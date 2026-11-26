@@ -81,7 +81,7 @@ export async function ingestManifestSource(entry: ProvenanceSource, mode: "snaps
           })
           .returning();
     if (!doc) throw new Error("source insert failed");
-    const counts = await extractSource(tx, doc.id, entry.cik, entry.form, bytes);
+    const counts = await extractStoredSource(tx, doc.id, entry.cik, entry.form, bytes);
     await tx.update(sourceDocument).set({ parseVersion: PARSE_VERSION }).where(eq(sourceDocument.id, doc.id));
     return { sourceId: doc.id, created: !existing, conflict, ...counts };
   });
@@ -102,7 +102,7 @@ async function insertLocator(tx: DbOrTx, row: Omit<LocatorInsert, "excerptHash">
   return found.id;
 }
 
-async function extractSource(tx: DbOrTx, sourceId: string, cik: string, form: string, bytes: Uint8Array): Promise<{ facts: number; locators: number }> {
+export async function extractStoredSource(tx: DbOrTx, sourceId: string, cik: string, form: string, bytes: Uint8Array): Promise<{ facts: number; locators: number }> {
   const html = Buffer.from(bytes);
   let locators = 0;
   const facts: FactInsert[] = [];

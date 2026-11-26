@@ -76,7 +76,7 @@ export interface ReplacementInput {
   rationale: string;
 }
 
-async function verifiedInputs(tx: Tx, caseId: string, epoch: number, formula: unknown, derivedClaimId: string): Promise<FormulaInput[]> {
+export async function verifiedInputs(tx: DbOrTx, caseId: string, epoch: number, formula: unknown, derivedClaimId: string): Promise<FormulaInput[]> {
   const inputBindings = await tx.query.claimBinding.findMany({ where: and(eq(claimBinding.claimId, derivedClaimId), eq(claimBinding.kind, "derived_input")) });
   const allowed = new Set(inputBindings.map((b) => b.refClaimId));
   const refs = formulaRefs(formula as Parameters<typeof formulaRefs>[0]);

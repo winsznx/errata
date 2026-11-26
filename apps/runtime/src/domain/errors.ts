@@ -1,5 +1,6 @@
 export type DomainErrorCode =
   | "NOT_FOUND"
+  | "UNAUTHENTICATED"
   | "FORBIDDEN"
   | "CONFLICT"
   | "STALE_EVIDENCE"
@@ -15,6 +16,7 @@ export type DomainErrorCode =
 
 const HTTP_STATUS: Record<DomainErrorCode, number> = {
   NOT_FOUND: 404,
+  UNAUTHENTICATED: 401,
   FORBIDDEN: 403,
   CONFLICT: 409,
   STALE_EVIDENCE: 409,
