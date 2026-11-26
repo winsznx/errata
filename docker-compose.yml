@@ -1,0 +1,21 @@
+name: errata
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: errata
+      POSTGRES_PASSWORD: errata
+      POSTGRES_DB: errata
+    ports:
+      - "127.0.0.1:54329:5432"
+    volumes:
+      - errata-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U errata -d errata"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  errata-db:
