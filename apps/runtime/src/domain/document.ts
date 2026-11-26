@@ -88,6 +88,17 @@ export function blocksToMarkdown(blocks: Block[]): string {
     .join("\n\n");
 }
 
+export type EpochVector = { caseId: string; epoch: number }[];
+
+/** jsonb reorders object keys, so epoch vectors are compared through a canonical string. */
+export function epochVectorKey(vector: EpochVector): string {
+  return [...vector].map((v) => `${v.caseId}:${v.epoch}`).sort().join(",");
+}
+
+export function sameEpochVector(a: EpochVector, b: EpochVector): boolean {
+  return epochVectorKey(a) === epochVectorKey(b);
+}
+
 export function contentHash(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
@@ -112,10 +123,10 @@ export function scanNumericTokens(blocks: Block[]): NumericToken[] {
   for (const block of blocks) {
     if (block.kind === "heading") continue;
     for (const match of block.text.matchAll(NUMERIC_TOKEN)) {
-      const text = match[0].trim();
+      const text = match[0].trim().replace(/[,.]+$/, "");
       if (NON_FINANCIAL.test(text.replace(/[$,()]/g, ""))) continue;
-      const start = match.index ?? 0;
-      tokens.push({ blockId: block.id, start, end: start + match[0].length, text });
+      const start = (match.index ?? 0) + (match[0].length - match[0].trimStart().length);
+      tokens.push({ blockId: block.id, start, end: start + text.length, text });
     }
   }
   return tokens;

@@ -155,8 +155,14 @@ export function scenarioRole(dimensions: Record<string, string>): {
   return { role: null, identityDimensions: dimensions };
 }
 
-export function findFactElementText(html: string | Buffer, factId: string): string | null {
+export function findFactElement(html: string | Buffer, factId: string): { text: string; value: Decimal | null } | null {
   const $ = loadDocument(html);
   const node = $(`ix\\:nonfraction[id="${factId.replace(/"/g, "")}"]`).first();
-  return node.length ? normalizeWhitespace(node.text()) : null;
+  if (!node.length) return null;
+  const text = normalizeWhitespace(node.text());
+  const digits = text.replace(/[,\s$]/g, "");
+  if (!/^[0-9]+(\.[0-9]+)?$/.test(digits)) return { text, value: null };
+  const scale = Number(node.attr("scale") ?? "0") || 0;
+  const value = new Decimal(digits).times(new Decimal(10).pow(scale));
+  return { text, value: node.attr("sign") === "-" ? value.negated() : value };
 }

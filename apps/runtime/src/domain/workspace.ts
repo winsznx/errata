@@ -19,7 +19,7 @@ import {
   workspace,
   workspaceSource,
 } from "../db/schema.js";
-import { computeFormula, displayDecimal, formulaRefs, type FormulaInput } from "../formula/engine.js";
+import { computeFormula, displayDecimal, formulaRefs, remapRefs, type FormulaInput } from "../formula/engine.js";
 import { parseDisplayedNumber } from "../parsing/numbers.js";
 import { ensureIssuers, ingestManifestSource } from "../sources/ingest.js";
 import { loadProvenance, sourceAvailableAt, type ProvenanceSource } from "../sources/provenance.js";
@@ -157,7 +157,13 @@ async function seedReport(
         material,
         semanticKey,
         bindingState: fixtureClaim.category === "OTHER" || (fixtureClaim.category === "QUALITATIVE" && !fixtureClaim.dependsOn) ? "UNMAPPED" : "BOUND",
-        formula: fixtureClaim.formula ?? null,
+        formula: fixtureClaim.formula
+          ? remapRefs(fixtureClaim.formula, (ref) => {
+              const id = claimIdByKey.get(ref);
+              if (!id) throw new SeedError(`${report.key}/${fixtureClaim.key}: formula input ${ref} is not a declared claim`);
+              return id;
+            })
+          : null,
         displayPrecision: fixtureClaim.displayPrecision ?? null,
         displayUnit: fixtureClaim.displayUnit ?? (factRow ? factRow.unit : null),
         valueDecimal,

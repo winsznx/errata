@@ -155,6 +155,21 @@ export function formulaRefs(node: FormulaNode): string[] {
   }
 }
 
+export function remapRefs(node: FormulaNode, map: (ref: string) => string): FormulaNode {
+  switch (node.op) {
+    case "ref":
+      return { op: "ref", ref: map(node.ref) };
+    case "const":
+      return node;
+    case "round":
+      return { ...node, arg: remapRefs(node.arg, map) };
+    case "pct_change":
+      return { ...node, from: remapRefs(node.from, map), to: remapRefs(node.to, map) };
+    default:
+      return { op: node.op, args: [remapRefs(node.args[0], map), remapRefs(node.args[1], map)] };
+  }
+}
+
 export const WORKING_CAPITAL = (assets: string, liabilities: string): FormulaNode => ({
   op: "sub",
   args: [
