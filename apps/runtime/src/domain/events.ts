@@ -59,19 +59,37 @@ export async function appendEvent(tx: Tx, input: EventInput): Promise<CommittedE
   return row;
 }
 
-/** Runs a transaction that records domain events, then publishes them only after the commit succeeds. */
+/** Postgres aborts one side of a deadlock or a serialization conflict; that side can safely run again from the start. */
+function isRetryableConflict(error: unknown): boolean {
+  for (let current: unknown = error; current; current = (current as { cause?: unknown }).cause) {
+    const code = (current as { code?: unknown }).code;
+    if (code === "40P01" || code === "40001") return true;
+  }
+  return false;
+}
+
+/**
+ * Runs a transaction that records domain events, then publishes them only after the commit succeeds. A transaction
+ * that Postgres aborted for a deadlock or serialization conflict is run again, up to three times in all.
+ */
 export async function commit<T>(work: (tx: Tx, record: (input: EventInput) => Promise<CommittedEvent>) => Promise<T>): Promise<{ result: T; events: CommittedEvent[] }> {
-  const events: CommittedEvent[] = [];
-  const result = await db.transaction(async (tx) => {
-    events.length = 0;
-    return work(tx, async (input) => {
-      const event = await appendEvent(tx, input);
-      events.push(event);
-      return event;
-    });
-  });
-  eventBus.emitCommitted(events);
-  return { result, events };
+  for (let attempt = 1; ; attempt += 1) {
+    const events: CommittedEvent[] = [];
+    try {
+      const result = await db.transaction(async (tx) =>
+        work(tx, async (input) => {
+          const event = await appendEvent(tx, input);
+          events.push(event);
+          return event;
+        }),
+      );
+      eventBus.emitCommitted(events);
+      return { result, events };
+    } catch (error) {
+      if (attempt >= 3 || !isRetryableConflict(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 20 * attempt + Math.random() * 30));
+    }
+  }
 }
 
 export function serializeEvent(event: CommittedEvent): Record<string, unknown> {

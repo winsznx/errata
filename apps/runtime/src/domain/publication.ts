@@ -158,6 +158,9 @@ async function carryDependencies(tx: Tx, workspaceId: string, carriedOver: Map<s
 
 export async function proposeRevisionPatch(ctx: ActorContext, input: PatchInput) {
   return commit(async (tx, record) => {
+    // Every writer locks draft revisions before cases (reissue and the reviews start from the draft), so this one takes
+    // the report's open drafts first, before the case, and the two cannot deadlock.
+    await tx.select({ id: researchRevision.id }).from(researchRevision).where(and(eq(researchRevision.reportId, input.reportId), eq(researchRevision.workspaceId, ctx.workspaceId), eq(researchRevision.documentState, "DRAFT"))).for("update");
     const caseRow = await lockCase(tx, ctx.workspaceId, input.caseId);
     guardEpoch(ctx, caseRow.evidenceEpoch);
     const report = await tx.query.researchReport.findFirst({ where: and(eq(researchReport.id, input.reportId), eq(researchReport.workspaceId, ctx.workspaceId)) });
