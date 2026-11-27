@@ -65,6 +65,16 @@ export class ErrataRuntimeState extends RuntimeState {
       otherActiveWork: [...this.activeRuns.values()].filter((r) => !caseId || r.caseId === caseId).map((r) => `${r.role}: ${r.task}`),
     };
   }
+
+  /** The same shared state with each active loop spelled out, for the runtime page. */
+  snapshot() {
+    return {
+      logicalTime: this.logicalTime,
+      lastEventSeq: this.lastEventSeq,
+      cases: Object.fromEntries(this.cases),
+      activeRuns: [...this.activeRuns].map(([agentRunId, r]) => ({ agentRunId, role: r.role, task: r.task, epoch: r.epoch })),
+    };
+  }
 }
 
 class OnEventTypes extends SituationSpecification {

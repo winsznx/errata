@@ -373,7 +373,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   app.get<{ Params: Params }>(`${W}/runtime`, async (request, reply) => {
     const p = await requirePrincipal(request, request.params.workspaceId);
     const runtime = await runtimeFor(p.workspaceId);
-    return ok(reply, { ...(await runtimeView(p.workspaceId)), participants: runtime.participants(), sharedState: runtime.state.projection() });
+    return ok(reply, { ...(await runtimeView(p.workspaceId)), participants: runtime.participants(), sharedState: runtime.state.snapshot() });
   });
   app.get<{ Params: Params; Querystring: { after?: string; limit?: string; type?: string } }>(`${W}/runtime/trace`, async (request, reply) => {
     const p = await requirePrincipal(request, request.params.workspaceId);

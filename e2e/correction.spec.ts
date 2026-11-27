@@ -23,6 +23,19 @@ test.describe("landing and demo", () => {
     await expect(page.getByRole("link", { name: /The Joint Corp/ }).first()).toBeVisible();
   });
 
+  test("the agent runtime page shows the Mozaik participants and shared state", async ({ page }) => {
+    // #given
+    await page.goto("/demo");
+    await page.getByRole("button", { name: "Start this workspace" }).click();
+    await page.waitForURL(/\/w\//);
+    // #when
+    await page.goto(`${new URL(page.url()).pathname}/runtime`);
+    // #then
+    await expect(page.getByRole("heading", { name: "Shared state" })).toBeVisible();
+    await expect(page.getByText(/Active loops:/)).toBeVisible();
+    await expect(page.getByRole("listitem").filter({ hasText: "Financial Verifier" })).toBeVisible();
+  });
+
   test("a figure in a note opens its filing evidence", async ({ page }) => {
     // #given
     await page.goto("/demo");
