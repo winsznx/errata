@@ -55,6 +55,13 @@ export function classifyProviderError(error: unknown): ModelCallError {
   return new ModelCallError(message, "PROVIDER_ERROR");
 }
 
+/** Groq refuses a completion whose sampled tool call is not valid JSON; the same request usually succeeds when sent again. */
+export function isMalformedToolCall(error: unknown): boolean {
+  const status = (error as { status?: number }).status;
+  const message = error instanceof Error ? error.message : String(error);
+  return status === 400 && /failed to parse tool call arguments|tool_use_failed/i.test(message);
+}
+
 export interface ProviderLimit {
   window: "minute" | "day";
   until: string;
@@ -180,11 +187,11 @@ export class GuardedInferenceRunner implements InferenceRunner {
   }
 
   /**
-   * Retries provider rate limits, waiting as long as the provider asks, and up to two attempts that timed out or lost
-   * their connection, all within the call deadline enforced by run().
+   * Retries provider rate limits, waiting as long as the provider asks, and up to two attempts that timed out, lost
+   * their connection or came back with a malformed tool call, all within the call deadline enforced by run().
    */
   private async runWithBackoff(input: InferenceInput, call: CallContext): Promise<InferenceOutput> {
-    let connectionFailures = 0;
+    let transientFailures = 0;
     for (let attempt = 1; ; attempt += 1) {
       try {
         const output = await this.inner.run(input);
@@ -192,16 +199,16 @@ export class GuardedInferenceRunner implements InferenceRunner {
         return output;
       } catch (error) {
         const classified = classifyProviderError(error);
-        const connectionLost = error instanceof APIConnectionError;
+        const transient = error instanceof APIConnectionError || isMalformedToolCall(error);
         if (classified.code === "RATE_LIMITED") {
           const hinted = retryDelayMs(classified.message);
           providerLimit = { window: /per day|\(TPD\)|\(RPD\)/i.test(classified.message) ? "day" : "minute", until: Date.now() + (hinted ?? 60_000) };
         }
-        if (connectionLost) connectionFailures += 1;
-        const retryable = (classified.code === "RATE_LIMITED" && attempt < 12) || (connectionLost && connectionFailures <= 2);
+        if (transient) transientFailures += 1;
+        const retryable = (classified.code === "RATE_LIMITED" && attempt < 12) || (transient && transientFailures <= 2);
         if (!retryable) throw error;
-        const wait = connectionLost ? 2000 : (retryDelayMs(classified.message) ?? Math.min(30_000, 2 ** attempt * 1000));
-        console.warn(`[model] run ${call.agentRunId} attempt ${attempt} ${connectionLost ? "lost its connection or timed out" : "was rate limited"}; retrying in ${Math.round(wait / 1000)}s`);
+        const wait = transient ? 2000 : (retryDelayMs(classified.message) ?? Math.min(30_000, 2 ** attempt * 1000));
+        console.warn(`[model] run ${call.agentRunId} attempt ${attempt} ${transient ? "lost its connection, timed out or got a malformed tool call" : "was rate limited"}; retrying in ${Math.round(wait / 1000)}s`);
         await whileWaiting(call, () => new Promise((r) => setTimeout(r, wait + 250 + Math.random() * 500)));
       }
     }

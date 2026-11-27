@@ -1,7 +1,7 @@
 import { ModelContext, type InferenceInput, type InferenceOutput, type InferenceRunner } from "@mozaik-ai/core";
 import { APIConnectionTimeoutError } from "openai";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type CallContext, GuardedInferenceRunner, classifyProviderError, currentProviderLimit, retryDelayMs } from "./model.js";
+import { type CallContext, GuardedInferenceRunner, classifyProviderError, currentProviderLimit, isMalformedToolCall, retryDelayMs } from "./model.js";
 
 describe("classifyProviderError", () => {
   it("treats a billing refusal as a quota stop, not a retryable error", () => {
@@ -20,6 +20,14 @@ describe("classifyProviderError", () => {
     const classified = classifyProviderError(error);
     // #then
     expect(classified.code).toBe("RATE_LIMITED");
+  });
+
+  it("recognises Groq's refusal of a malformed tool call as worth sending again", () => {
+    // #given
+    const malformed = Object.assign(new Error("400 Failed to parse tool call arguments as JSON"), { status: 400 });
+    const invalid = Object.assign(new Error("400 model does not support tools"), { status: 400 });
+    // #then
+    expect([isMalformedToolCall(malformed), isMalformedToolCall(invalid)]).toEqual([true, false]);
   });
 
   it("reads the provider's wait hint in seconds and minutes", () => {
