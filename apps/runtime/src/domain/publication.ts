@@ -1,9 +1,10 @@
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
-import type { DbOrTx } from "../db/client.js";
+import type { DbOrTx, Tx } from "../db/client.js";
 import {
   challenge,
   claim,
   claimBinding,
+  claimDependency,
   claimImpact,
   correctionCase,
   correctionNotice,
@@ -141,6 +142,20 @@ export async function evaluateCandidate(tx: DbOrTx, candidateId: string): Promis
   return { blockers: [...new Set(blockers)], epochVector };
 }
 
+/**
+ * Gives each claim of a new revision the incoming dependency edges of the claim it replaces, so a later disclosure
+ * about the same figures reaches the current version too. Edges from a claim that was itself carried over point at
+ * its new copy; edges from facts and from claims that stayed behind are kept as they are.
+ */
+async function carryDependencies(tx: Tx, workspaceId: string, carriedOver: Map<string, string>): Promise<void> {
+  if (!carriedOver.size) return;
+  const edges = await tx.select().from(claimDependency).where(and(eq(claimDependency.workspaceId, workspaceId), inArray(claimDependency.toNode, [...carriedOver.keys()].map((id) => `claim:${id}`))));
+  const remap = (node: string) => (node.startsWith("claim:") ? `claim:${carriedOver.get(node.slice(6)) ?? node.slice(6)}` : node);
+  for (const edge of edges) {
+    await tx.insert(claimDependency).values({ workspaceId, fromNode: remap(edge.fromNode), toNode: remap(edge.toNode), type: edge.type }).onConflictDoNothing();
+  }
+}
+
 export async function proposeRevisionPatch(ctx: ActorContext, input: PatchInput) {
   return commit(async (tx, record) => {
     const caseRow = await lockCase(tx, ctx.workspaceId, input.caseId);
@@ -255,6 +270,7 @@ export async function proposeRevisionPatch(ctx: ActorContext, input: PatchInput)
         createdBy: ctx.actor.id,
       })
       .returning();
+    const carriedOver = new Map<string, string>();
     for (const placement of placements) {
       const original = claimById.get(placement.claimId)!;
       const resolved = verifiedValue.get(placement.claimId);
@@ -283,6 +299,7 @@ export async function proposeRevisionPatch(ctx: ActorContext, input: PatchInput)
         })
         .returning({ id: claim.id });
       if (placement.kind === "claim") {
+        carriedOver.set(original.id, created!.id);
         for (const factId of resolved!.factIds) await tx.insert(claimBinding).values({ claimId: created!.id, workspaceId: ctx.workspaceId, kind: "fact", factId, justification: "Verified replacement", createdBy: "case-engine" });
       }
     }
@@ -292,12 +309,15 @@ export async function proposeRevisionPatch(ctx: ActorContext, input: PatchInput)
         if (c.category === "QUALITATIVE" && rewrittenQualitative.includes(c.id)) {
           const newBlockId = `${c.blockId}-r${caseRow.evidenceEpoch}`;
           const text = blocks.find((b) => b.id === newBlockId)?.text ?? "";
-          await tx.insert(claim).values({ revisionId: candidate!.id, workspaceId: ctx.workspaceId, lineageId: c.lineageId, blockId: newBlockId, startOffset: 0, endOffset: Math.max(1, text.length), category: "QUALITATIVE", text, label: `${c.label} (rewritten)`, material: true, bindingState: "PROPOSED", reason: "Rewritten by the publication editor; needs editorial approval", creationMethod: "editor_rewrite", proposedBy: ctx.actor.id });
+          const [rewritten] = await tx.insert(claim).values({ revisionId: candidate!.id, workspaceId: ctx.workspaceId, lineageId: c.lineageId, blockId: newBlockId, startOffset: 0, endOffset: Math.max(1, text.length), category: "QUALITATIVE", text, label: `${c.label} (rewritten)`, material: true, bindingState: "PROPOSED", reason: "Rewritten by the publication editor; needs editorial approval", creationMethod: "editor_rewrite", proposedBy: ctx.actor.id }).returning({ id: claim.id });
+          carriedOver.set(c.id, rewritten!.id);
         }
         continue;
       }
-      await tx.insert(claim).values({ ...c, id: undefined, revisionId: candidate!.id, createdAt: undefined });
+      const [copied] = await tx.insert(claim).values({ ...c, id: undefined, revisionId: candidate!.id, createdAt: undefined }).returning({ id: claim.id });
+      carriedOver.set(c.id, copied!.id);
     }
+    await carryDependencies(tx, ctx.workspaceId, carriedOver);
     const { blockers } = await evaluateCandidate(tx, candidate!.id);
     const state = blockers.length ? "BLOCKED" : "READY";
     await tx.update(researchRevision).set({ candidateState: state, noticeDraft: { ...meta, blockers } as unknown as Record<string, unknown> }).where(eq(researchRevision.id, candidate!.id));

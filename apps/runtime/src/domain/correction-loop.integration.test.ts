@@ -4,6 +4,7 @@ import { db, sqlClient } from "../db/client.js";
 import {
   agentRun,
   claim,
+  claimDependency,
   claimImpact,
   correctionCase,
   correctionNotice,
@@ -173,6 +174,16 @@ describe("Nocera correction loop through the domain guards", () => {
     const deliveries = await db.select().from(delivery).where(and(eq(delivery.noticeId, notices[0]!.id)));
     expect(deliveries).toHaveLength(3);
     expect(after.title).toBe("Nocera Q1 2025: restated figures show a working capital deficit");
+    const current = await db.select().from(claim).where(eq(claim.revisionId, candidate.id));
+    const currentByLabel = (label: string) => current.find((c) => c.label === label)!;
+    const incoming = async (claimId: string) => (await db.select().from(claimDependency).where(and(eq(claimDependency.workspaceId, workspaceId), eq(claimDependency.toNode, `claim:${claimId}`)))).map((e) => [e.type, e.fromNode]);
+    expect(await incoming(currentByLabel("Total current assets, March 31, 2025").id)).toEqual([["CITES", `fact:${byLabel("Total current assets, March 31, 2025").claim.semanticKey}`]]);
+    expect((await incoming(currentByLabel("Working capital, March 31, 2025").id)).sort()).toEqual(
+      [
+        ["DERIVES_FROM", `claim:${currentByLabel("Total current assets, March 31, 2025").id}`],
+        ["DERIVES_FROM", `claim:${currentByLabel("Total current liabilities, March 31, 2025").id}`],
+      ].sort(),
+    );
     const finalCase = await db.query.correctionCase.findFirst({ where: eq(correctionCase.id, caseId) });
     expect(["RESOLVED", "PARTIALLY_REISSUED"]).toContain(finalCase!.status);
   });
