@@ -34,6 +34,8 @@ export function describeEvent(event: DomainEventView): string {
       return `Checked and left unaffected: ${Array.isArray(p.reports) ? (p.reports as { title: string }[]).map((r) => r.title).join("; ") : ""}`;
     case "report.warning_applied":
       return str(p.warningType) === "NON_RELIANCE" ? "Reader warning applied to a published note" : "Note marked under review";
+    case "report.warning_cleared":
+      return "Review finished: the note does not rely on the affected figures, warning removed";
     case "report.warning_text_updated":
       return `${role} wrote the reader explanation for a warning`;
     case "claim.replacement_proposed":
@@ -48,6 +50,8 @@ export function describeEvent(event: DomainEventView): string {
       return "Challenge resolved";
     case "report.revision_prepared":
       return Array.isArray(p.blockers) && p.blockers.length ? `${role} drafted a correction with ${p.blockers.length} blockers` : `${role} drafted a correction ready for review`;
+    case "report.conclusions_reviewed":
+      return str(p.verdict) === "consistent" ? `${role} checked the rewritten conclusions against the corrected figures` : `${role} found a rewritten conclusion that contradicts the corrected figures`;
     case "report.approved":
       return "Editor approved the exact draft";
     case "report.changes_requested":
