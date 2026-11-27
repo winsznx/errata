@@ -98,7 +98,7 @@ export interface Task {
 export function verifyTask(proposal: { id: string; kind: string; proposerAgent: string; caseId: string; epoch: number }, attempt: string, trigger: string, retried: boolean): Task {
   const how =
     proposal.kind === "formula"
-      ? "Recompute it with compute_formula and submit the value it returns, copied in full."
+      ? "Recompute it with compute_formula and submit verdict verified with the value it returns, copied in full. The figure printed in the note is the original one and is expected to differ; do not compare with it. Code compares your value with the proposal."
       : proposal.kind === "unaffected"
         ? "Read the claim and confirm it contains no figures and relies on none."
         : "Choose the cell for the claim's period end, read it with read_source_excerpt, check its column header says as restated, convert the printed value to base units using the scale note, and submit that value with that locator id.";

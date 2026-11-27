@@ -52,7 +52,7 @@ function buildCommit(): string {
   if (ENV.BUILD_COMMIT !== "local") return ENV.BUILD_COMMIT;
   try {
     const head = execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim();
-    const dirty = execFileSync("git", ["status", "--porcelain", "--untracked-files=no"], { encoding: "utf8" }).trim();
+    const dirty = execFileSync("git", ["status", "--porcelain", "--untracked-files=no", "--", ".", ":!evaluation"], { encoding: "utf8", cwd: resolve(process.cwd(), "../..") }).trim();
     return dirty ? `${head}-dirty` : head;
   } catch {
     return "local";
