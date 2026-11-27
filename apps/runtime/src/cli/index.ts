@@ -25,6 +25,7 @@ Commands:
          [--timeout <seconds>]            to approve and reissue a ready draft. Prints the workspace slug for the web UI.
   evaluate --scenario <id> [--runs <n>]   Run the scenario n times with --approve, then score each run against
                                           datasets/evaluation/<id>.expected.json and write evaluation/results.
+  score --workspace <slug>                Score a finished scenario workspace against its ground truth and save the result.
   inspect-run --workspace <slug>          Print the agent runs, challenges and outcome for a workspace.
 `;
 
@@ -220,6 +221,22 @@ async function main(): Promise<void> {
     }
     const file = resolve(outDir, `${scenarioId}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
     await writeFile(file, `${JSON.stringify(results, null, 2)}\n`);
+    console.log(`wrote ${file}`);
+    return;
+  }
+  if (command === "score") {
+    const slug = arg("workspace");
+    const ws = slug ? await db.query.workspace.findFirst({ where: eq(workspace.slug, slug) }) : null;
+    if (!ws?.scenarioId) throw new Error("workspace not found or not a scenario workspace");
+    const expected = JSON.parse(await readFile(resolve(datasetsDir(), "evaluation", `${ws.scenarioId}.expected.json`), "utf8")) as Expected;
+    const scored = await score(ws.id, expected);
+    const cases = await db.select().from(correctionCase).where(eq(correctionCase.workspaceId, ws.id));
+    const record = { scenarioId: ws.scenarioId, workspace: ws.slug, model: `${ENV.MODEL_PROVIDER}/${ENV.MODEL_ID}`, sdk: SDK_VERSION, scoredAt: new Date().toISOString(), caseStatuses: cases.map((c) => c.status), ...scored };
+    const outDir = resolve(process.cwd(), "../../evaluation/results");
+    await mkdir(outDir, { recursive: true });
+    const file = resolve(outDir, `${ws.scenarioId}-${ws.slug}.json`);
+    await writeFile(file, `${JSON.stringify(record, null, 2)}\n`);
+    console.log(JSON.stringify(record, null, 2));
     console.log(`wrote ${file}`);
     return;
   }

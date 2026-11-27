@@ -161,7 +161,7 @@ export class GuardedInferenceRunner implements InferenceRunner {
         return await this.inner.run(input);
       } catch (error) {
         const classified = classifyProviderError(error);
-        if (classified.code !== "RATE_LIMITED" || attempt >= 6) throw error;
+        if (classified.code !== "RATE_LIMITED" || attempt >= 12) throw error;
         const wait = retryDelayMs(classified.message) ?? Math.min(30_000, 2 ** attempt * 1000);
         await new Promise((r) => setTimeout(r, wait + 250 + Math.random() * 500));
       }
