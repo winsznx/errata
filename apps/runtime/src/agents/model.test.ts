@@ -25,9 +25,10 @@ describe("classifyProviderError", () => {
   it("recognises Groq's refusal of a malformed tool call as worth sending again", () => {
     // #given
     const malformed = Object.assign(new Error("400 Failed to parse tool call arguments as JSON"), { status: 400 });
+    const offSchema = Object.assign(new Error("400 Tool call validation failed: parameters for tool propose_replacement did not match schema"), { status: 400 });
     const invalid = Object.assign(new Error("400 model does not support tools"), { status: 400 });
     // #then
-    expect([isMalformedToolCall(malformed), isMalformedToolCall(invalid)]).toEqual([true, false]);
+    expect([isMalformedToolCall(malformed), isMalformedToolCall(offSchema), isMalformedToolCall(invalid)]).toEqual([true, true, false]);
   });
 
   it("reads the provider's wait hint in seconds and minutes", () => {

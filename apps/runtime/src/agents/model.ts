@@ -55,11 +55,14 @@ export function classifyProviderError(error: unknown): ModelCallError {
   return new ModelCallError(message, "PROVIDER_ERROR");
 }
 
-/** Groq refuses a completion whose sampled tool call is not valid JSON; the same request usually succeeds when sent again. */
+/**
+ * Groq refuses a completion whose sampled tool call is not valid JSON or does not match the tool's schema; the same
+ * request usually succeeds when sent again.
+ */
 export function isMalformedToolCall(error: unknown): boolean {
   const status = (error as { status?: number }).status;
   const message = error instanceof Error ? error.message : String(error);
-  return status === 400 && /failed to parse tool call arguments|tool_use_failed/i.test(message);
+  return status === 400 && /failed to parse tool call arguments|tool call validation failed|tool_use_failed/i.test(message);
 }
 
 export interface ProviderLimit {
