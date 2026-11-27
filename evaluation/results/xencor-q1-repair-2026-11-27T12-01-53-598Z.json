@@ -1,0 +1,80 @@
+[
+  {
+    "scenarioId": "xencor-q1-repair",
+    "run": 1,
+    "model": "groq/openai/gpt-oss-120b",
+    "sdk": "@mozaik-ai/core 4.2.0",
+    "buildCommit": "local",
+    "startedAt": "2026-11-27T11:40:41.814Z",
+    "endedAt": "2026-11-27T12:01:53.554Z",
+    "workspace": "xencor-udcgwl0",
+    "reissued": 0,
+    "caseStatuses": [],
+    "impact": {
+      "truePositives": 0,
+      "falsePositives": 0,
+      "falseNegatives": 6,
+      "predicted": 0,
+      "groundTruth": 6
+    },
+    "replacements": {
+      "correct": 0,
+      "expected": 4,
+      "rows": [
+        {
+          "label": "Total current assets, March 31, 2024",
+          "expected": "574847000",
+          "accepted": null,
+          "correct": false
+        },
+        {
+          "label": "Total current liabilities, March 31, 2024",
+          "expected": "71075000",
+          "accepted": null,
+          "correct": false
+        },
+        {
+          "label": "Working capital, March 31, 2024",
+          "expected": "503772000",
+          "accepted": null,
+          "correct": false
+        },
+        {
+          "label": "Current ratio, March 31, 2024",
+          "expected": "8.087893070699964825888146324305311290890",
+          "accepted": null,
+          "correct": false
+        }
+      ],
+      "unsupportedAccepted": 0,
+      "accepted": 0,
+      "rejected": 0
+    },
+    "candidates": [],
+    "falseWarnings": [],
+    "scope": {
+      "matched": false,
+      "found": []
+    },
+    "finalFigureCoverage": {
+      "covered": 4,
+      "total": 4
+    },
+    "concurrency": {
+      "runs": 2,
+      "overlappingRunPairs": 0,
+      "overlapSeconds": 0,
+      "challenges": 0,
+      "staleRejections": 0,
+      "failed": 2
+    },
+    "tokens": {
+      "input": 2324,
+      "output": 232
+    },
+    "latencySeconds": {
+      "noticeToWarning": null,
+      "amendmentToReadyDraft": null
+    }
+  }
+]

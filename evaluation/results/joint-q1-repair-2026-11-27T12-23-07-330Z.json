@@ -1,0 +1,74 @@
+[
+  {
+    "scenarioId": "joint-q1-repair",
+    "run": 1,
+    "model": "groq/openai/gpt-oss-120b",
+    "sdk": "@mozaik-ai/core 4.2.0",
+    "buildCommit": "local",
+    "startedAt": "2026-11-27T12:01:56.437Z",
+    "endedAt": "2026-11-27T12:23:07.297Z",
+    "workspace": "joint-9vgbq6y",
+    "reissued": 0,
+    "caseStatuses": [],
+    "impact": {
+      "truePositives": 0,
+      "falsePositives": 0,
+      "falseNegatives": 3,
+      "predicted": 0,
+      "groundTruth": 3
+    },
+    "replacements": {
+      "correct": 0,
+      "expected": 3,
+      "rows": [
+        {
+          "label": "Total current assets, March 31, 2025",
+          "expected": "70730694",
+          "accepted": null,
+          "correct": false
+        },
+        {
+          "label": "Total current liabilities, March 31, 2025",
+          "expected": "42707086",
+          "accepted": null,
+          "correct": false
+        },
+        {
+          "label": "Working capital, March 31, 2025",
+          "expected": "28023608",
+          "accepted": null,
+          "correct": false
+        }
+      ],
+      "unsupportedAccepted": 0,
+      "accepted": 0,
+      "rejected": 0
+    },
+    "candidates": [],
+    "falseWarnings": [],
+    "scope": {
+      "matched": false,
+      "found": []
+    },
+    "finalFigureCoverage": {
+      "covered": 3,
+      "total": 3
+    },
+    "concurrency": {
+      "runs": 2,
+      "overlappingRunPairs": 0,
+      "overlapSeconds": 0,
+      "challenges": 0,
+      "staleRejections": 0,
+      "failed": 2
+    },
+    "tokens": {
+      "input": 2314,
+      "output": 214
+    },
+    "latencySeconds": {
+      "noticeToWarning": null,
+      "amendmentToReadyDraft": null
+    }
+  }
+]
