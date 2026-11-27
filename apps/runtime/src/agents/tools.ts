@@ -21,6 +21,7 @@ import type { AgentRole } from "./prompts.js";
 export interface ToolContext {
   workspaceId: string;
   role: AgentRole;
+  taskKind?: string;
   agentRunId: string;
   caseId: string | null;
   epoch: number | null;
@@ -145,6 +146,22 @@ function defineTool<S extends z.ZodTypeAny>(ctx: ToolContext, spec: { name: stri
 
 const ID = z.string().uuid();
 const idSchema = (name: string, description: string) => ({ type: "object", properties: { [name]: { type: "string", description } }, required: [name], additionalProperties: false });
+
+/** Each task sees only the tools it needs. Tool schemas are sent with every model call, so this keeps calls small. */
+const TASK_TOOLS: Record<string, string[]> = {
+  classify_filing: ["list_source_sections", "read_source_excerpt", "propose_disclosure_scope", "record_task_outcome"],
+  respond_scope_challenge: ["list_source_sections", "read_source_excerpt", "propose_disclosure_scope", "record_task_outcome"],
+  link_amendment: ["list_source_sections", "read_source_excerpt", "propose_amendment_link", "record_task_outcome"],
+  check_scope: ["list_source_sections", "read_source_excerpt", "check_disclosure_scope", "record_task_outcome"],
+  verify_replacement: ["get_proposal", "list_source_sections", "read_source_excerpt", "compute_formula", "submit_verification", "record_task_outcome"],
+  review_conclusions: ["get_draft_for_review", "review_draft_conclusions", "record_task_outcome"],
+  verify_bindings: ["get_draft", "list_source_sections", "read_source_excerpt", "confirm_binding", "record_task_outcome"],
+  propose_replacements: ["get_case", "find_fact_candidates", "propose_replacement", "raise_challenge", "record_task_outcome"],
+  extract_claims: ["get_draft", "search_facts", "propose_claim", "record_task_outcome"],
+  write_warning: ["get_case", "propose_warning_text", "record_task_outcome"],
+  draft_revision: ["get_report_for_editing", "propose_revision_patch", "record_task_outcome"],
+  revise_draft: ["get_report_for_editing", "get_draft_for_review", "propose_revision_patch", "record_task_outcome"],
+};
 
 export function buildTools(ctx: ToolContext): Tool[] {
   const tools: Record<string, Tool> = {
@@ -462,5 +479,6 @@ export function buildTools(ctx: ToolContext): Tool[] {
     "financial-verifier": ["get_case", "get_proposal", "list_source_sections", "read_source_excerpt", "check_disclosure_scope", "compute_formula", "submit_verification", "raise_challenge", "get_draft", "confirm_binding", "get_draft_for_review", "review_draft_conclusions", "record_task_outcome"],
     "publication-editor": ["get_case", "get_report_for_editing", "get_draft_for_review", "propose_warning_text", "propose_revision_patch", "record_task_outcome"],
   };
-  return byRole[ctx.role].map((name) => tools[name]!);
+  const names = (ctx.taskKind && TASK_TOOLS[ctx.taskKind]) || byRole[ctx.role];
+  return names.filter((name) => byRole[ctx.role].includes(name)).map((name) => tools[name]!);
 }

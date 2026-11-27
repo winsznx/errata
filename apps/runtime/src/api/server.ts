@@ -441,6 +441,15 @@ export async function buildServer(): Promise<FastifyInstance> {
     return ok(reply, await inboxFor(recipient.workspaceId, recipient.id));
   });
 
+  if (ENV.ENABLE_TEST_HARNESS && ENV.NODE_ENV !== "production") {
+    app.post("/api/v1/test/harness/nocera-ready", async (_request, reply) => {
+      const { prepareReadyNoceraWorkspace } = await import("../testing/harness.js");
+      const prepared = await prepareReadyNoceraWorkspace();
+      const principal = await issueSession(reply, prepared.workspaceId, "editor");
+      return ok(reply, { ...prepared, principal }, 201);
+    });
+  }
+
   await registerIntakeRoutes(app);
   return app;
 }

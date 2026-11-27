@@ -233,6 +233,10 @@ async function main(): Promise<void> {
   process.exitCode = 1;
 }
 
+process.on("unhandledRejection", (reason) => {
+  console.error("[cli] agent loop error recorded on its run:", reason instanceof Error ? reason.message.slice(0, 200) : reason);
+});
+
 main()
   .catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : error);

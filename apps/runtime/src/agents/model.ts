@@ -18,7 +18,7 @@ class Semaphore {
 export class ModelCallError extends Error {
   constructor(
     message: string,
-    readonly code: "TIMEOUT" | "QUOTA_EXCEEDED" | "PROVIDER_ERROR" | "FAULT_INJECTED_TIMEOUT",
+    readonly code: "TIMEOUT" | "QUOTA_EXCEEDED" | "PROVIDER_ERROR" | "RATE_LIMITED" | "FAULT_INJECTED_TIMEOUT",
   ) {
     super(message);
   }
@@ -34,10 +34,20 @@ export interface CallContext {
 }
 
 /** Billing and quota refusals are not transient; retrying them only repeats the failure. */
+/** Reads the provider's own wait hint ("try again in 7.24s", "try again in 1m3.5s") so a rate-limited call waits exactly as long as asked. */
+export function retryDelayMs(message: string): number | null {
+  const match = /try again in\s+(?:(\d+)m)?\s*([\d.]+)\s*(ms|s)/i.exec(message);
+  if (!match) return null;
+  const minutes = Number(match[1] ?? 0);
+  const value = Number(match[2]);
+  return Math.ceil(minutes * 60_000 + (match[3] === "ms" ? value : value * 1000));
+}
+
 export function classifyProviderError(error: unknown): ModelCallError {
   const message = error instanceof Error ? error.message : String(error);
   const status = (error as { status?: number }).status;
-  const billing = /(credit|quota|billing|insufficient|exceeded your current)/i.test(message);
+  if (/rate limit reached|try again in/i.test(message)) return new ModelCallError(message, "RATE_LIMITED");
+  const billing = /(no credits|credit balance|insufficient_quota|exceeded your current quota|payment required)/i.test(message);
   if ((status === 402 || status === 429 || status === 400) && billing) return new ModelCallError(`The model provider refused the call for billing or quota reasons: ${message.slice(0, 200)}`, "QUOTA_EXCEEDED");
   return new ModelCallError(message, "PROVIDER_ERROR");
 }
@@ -119,7 +129,7 @@ export class GuardedInferenceRunner implements InferenceRunner {
     let timer: NodeJS.Timeout | undefined;
     try {
       const output = await Promise.race([
-        this.inner.run(input),
+        this.runWithBackoff(input),
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => reject(new ModelCallError(`model call exceeded ${ENV.MODEL_CALL_TIMEOUT_MS} ms`, "TIMEOUT")), ENV.MODEL_CALL_TIMEOUT_MS);
         }),
@@ -141,6 +151,20 @@ export class GuardedInferenceRunner implements InferenceRunner {
       clearTimeout(timer);
       releaseLocal();
       releaseGlobal();
+    }
+  }
+
+  /** Retries only provider rate limits, waiting as long as the provider asks, within the call deadline enforced by run(). */
+  private async runWithBackoff(input: InferenceInput): Promise<InferenceOutput> {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await this.inner.run(input);
+      } catch (error) {
+        const classified = classifyProviderError(error);
+        if (classified.code !== "RATE_LIMITED" || attempt >= 6) throw error;
+        const wait = retryDelayMs(classified.message) ?? Math.min(30_000, 2 ** attempt * 1000);
+        await new Promise((r) => setTimeout(r, wait + 250 + Math.random() * 500));
+      }
     }
   }
 

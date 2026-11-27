@@ -11,7 +11,10 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
-    "errata": "pnpm --filter @errata/runtime cli"
+    "errata": "pnpm --filter @errata/runtime cli",
+    "test:e2e": "playwright test",
+    "test:integration": "pnpm --filter @errata/runtime test:integration",
+    "test:live": "pnpm --filter @errata/runtime cli replay --scenario nocera-q1-repair --approve"
   },
   "devDependencies": {
     "@playwright/test": "1.65.1"

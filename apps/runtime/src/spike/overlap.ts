@@ -13,6 +13,7 @@ import {
   type SituationContext,
   type SituationHandler,
 } from "@mozaik-ai/core";
+import { modelRegistry } from "../agents/model.js";
 
 class SpikeState extends RuntimeState {
   epoch = 1;
@@ -20,7 +21,7 @@ class SpikeState extends RuntimeState {
 }
 
 const { initializeRuntime, resolveRuntime, join, sendEvent, runLoop } = defineRuntime<SpikeState>();
-initializeRuntime({ state: new SpikeState() });
+initializeRuntime({ state: new SpikeState(), inferenceRunnerConfig: { supportedModels: modelRegistry() } });
 
 class OnType extends SituationSpecification {
   constructor(private readonly type: string) {

@@ -31,8 +31,8 @@ const ENV_SCHEMA = z.object({
   MODEL_MAX_OUTPUT_TOKENS: intFromEnv(4096),
   MODEL_CONCURRENCY_GLOBAL: intFromEnv(8),
   MODEL_CONCURRENCY_WORKSPACE: intFromEnv(4),
-  MODEL_CALL_TIMEOUT_MS: intFromEnv(90_000),
-  TASK_DEADLINE_MS: intFromEnv(240_000),
+  MODEL_CALL_TIMEOUT_MS: intFromEnv(240_000),
+  TASK_DEADLINE_MS: intFromEnv(600_000),
   MODEL_MAX_CALLS_PER_RUN: intFromEnv(400),
   MODEL_DAILY_BUDGET_CALLS: intFromEnv(4000),
   MAX_TOOL_CALLS_PER_LOOP: intFromEnv(20),
@@ -41,6 +41,7 @@ const ENV_SCHEMA = z.object({
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   ENABLE_LIVE_MONITOR: boolFromEnv(false),
   ENABLE_TEST_FAULTS: boolFromEnv(false),
+  ENABLE_TEST_HARNESS: boolFromEnv(false),
   BUILD_COMMIT: z.string().default("local"),
 });
 
@@ -56,6 +57,7 @@ function loadEnv(): Env {
     if (env.SESSION_SECRET.startsWith("development-only")) throw new Error("SESSION_SECRET must be set in production");
     if (env.INTERNAL_API_TOKEN.startsWith("development-only")) throw new Error("INTERNAL_API_TOKEN must be set in production");
     if (env.SEC_USER_AGENT.includes("errata.invalid")) throw new Error("SEC_USER_AGENT must declare a real contact in production");
+    if (env.ENABLE_TEST_HARNESS) throw new Error("ENABLE_TEST_HARNESS must not be set in production");
   }
   return env;
 }

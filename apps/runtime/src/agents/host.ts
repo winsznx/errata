@@ -53,12 +53,13 @@ export class ErrataRuntimeState extends RuntimeState {
   lastEventSeq = "0";
   faults: ScenarioFault[] = [];
 
-  projection(): Record<string, unknown> {
+  projection(caseId?: string | null): Record<string, unknown> {
+    const cases = caseId ? Object.fromEntries([...this.cases].filter(([id]) => id === caseId)) : Object.fromEntries(this.cases);
     return {
       logicalTime: this.logicalTime,
       lastEventSeq: this.lastEventSeq,
-      cases: Object.fromEntries(this.cases),
-      activeRuns: [...this.activeRuns.entries()].map(([id, r]) => ({ agentRunId: id, role: r.role, task: r.task, caseId: r.caseId, epoch: r.epoch })),
+      cases,
+      otherActiveWork: [...this.activeRuns.values()].filter((r) => !caseId || r.caseId === caseId).map((r) => `${r.role}: ${r.task}`),
     };
   }
 }
@@ -242,9 +243,9 @@ export class WorkspaceRuntime {
     const row = await db.query.agentRun.findFirst({ where: eq(agentRun.id, runId) });
     if (!row || !["FAILED", "TIMED_OUT"].includes(row.status)) return null;
     const role = row.role as AgentRole;
-    const message = (row.trigger.startsWith("{") ? (JSON.parse(row.trigger) as { message: string }).message : null) ?? "";
+    const trigger = row.trigger.startsWith("{") ? (JSON.parse(row.trigger) as { message?: string; kind?: string }) : {};
     const caseRow = row.caseId ? await db.query.correctionCase.findFirst({ where: eq(correctionCase.id, row.caseId) }) : null;
-    return this.launch(role, { kind: "retry", key: row.taskKey, caseId: row.caseId, epoch: caseRow?.evidenceEpoch ?? row.epoch, message, trigger: "retry" }, row.attempt + 1);
+    return this.launch(role, { kind: trigger.kind ?? "retry", key: row.taskKey, caseId: row.caseId, epoch: caseRow?.evidenceEpoch ?? row.epoch, message: trigger.message ?? "", trigger: "retry" }, row.attempt + 1);
   }
 
   private async sweep(): Promise<void> {
@@ -295,7 +296,7 @@ export class WorkspaceRuntime {
       const prior = await db.select({ id: agentRun.id, status: agentRun.status, attempt: agentRun.attempt }).from(agentRun).where(and(eq(agentRun.workspaceId, this.workspaceId), eq(agentRun.role, role), eq(agentRun.taskKey, task.key)));
       if (attempt === 1 && prior.length) return null;
       if (prior.some((p) => p.status === "STARTED") || prior.some((p) => p.attempt >= attempt)) return null;
-      if (task.kind !== "verify_replacement" && task.kind !== "retry") {
+      if (task.kind !== "verify_replacement" && attempt === 1) {
         const sameWork = [...this.state.activeRuns.values()].some((r) => r.role === role && r.task === task.kind && r.caseId === task.caseId);
         if (sameWork) return null;
       }
@@ -328,11 +329,11 @@ export class WorkspaceRuntime {
           return true;
         },
       });
-      const tools = buildTools({ workspaceId: this.workspaceId, role, agentRunId: runId, caseId: task.caseId, epoch: task.epoch, faults: this.state.faults });
+      const tools = buildTools({ workspaceId: this.workspaceId, role, taskKind: task.kind, agentRunId: runId, caseId: task.caseId, epoch: task.epoch, faults: this.state.faults });
       const message = [
         `[run:${runId}] Task: ${task.kind}${task.caseId ? ` for case ${task.caseId}` : ""}. Evidence revision: ${task.epoch ?? "n/a"}. Attempt ${attempt}.`,
         task.message,
-        `Shared runtime state (read only): ${JSON.stringify(this.state.projection())}`,
+        `Shared runtime state (read only): ${JSON.stringify(this.state.projection(task.caseId))}`,
       ].join("\n\n");
 
       let cloudSessionUrl: string | null = null;
