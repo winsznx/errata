@@ -14,14 +14,21 @@ async function deliver(job: Job): Promise<void> {
   const attempt = row.attemptCount + 1;
   await db.update(delivery).set({ status: "PROCESSING", attemptCount: attempt, updatedAt: new Date() }).where(eq(delivery.id, row.id));
   const [attemptRow] = await db.insert(deliveryAttempt).values({ deliveryId: row.id, attempt, status: "PROCESSING" }).onConflictDoNothing().returning();
-  const report = row.revisionId ? await db.query.researchReport.findFirst({ where: eq(researchReport.currentRevisionId, row.revisionId) }) : null;
-  const obsolete = row.kind === "correction_notice" && !report;
-  const status = obsolete ? "CANCELLED" : "SIMULATED_DELIVERED";
-  await db.update(delivery).set({ status, deliveredAt: obsolete ? null : new Date(), lastError: obsolete ? "A newer version replaced this correction before delivery" : null, updatedAt: new Date() }).where(eq(delivery.id, row.id));
-  if (attemptRow) await db.update(deliveryAttempt).set({ status, endedAt: new Date() }).where(eq(deliveryAttempt.id, attemptRow.id));
-  await commit(async (_tx, record) => {
-    await record({ workspaceId: row.workspaceId, type: obsolete ? "delivery.cancelled" : "delivery.simulated", actor: { kind: "system", id: "outbox" }, payload: { deliveryId: row.id, noticeId: row.noticeId, recipientId: row.recipientId, attempt } });
-  });
+  try {
+    const report = row.revisionId ? await db.query.researchReport.findFirst({ where: eq(researchReport.currentRevisionId, row.revisionId) }) : null;
+    const obsolete = row.kind === "correction_notice" && !report;
+    const status = obsolete ? "CANCELLED" : "SIMULATED_DELIVERED";
+    await db.update(delivery).set({ status, deliveredAt: obsolete ? null : new Date(), lastError: obsolete ? "A newer version replaced this correction before delivery" : null, updatedAt: new Date() }).where(eq(delivery.id, row.id));
+    if (attemptRow) await db.update(deliveryAttempt).set({ status, endedAt: new Date() }).where(eq(deliveryAttempt.id, attemptRow.id));
+    await commit(async (_tx, record) => {
+      await record({ workspaceId: row.workspaceId, type: obsolete ? "delivery.cancelled" : "delivery.simulated", actor: { kind: "system", id: "outbox" }, payload: { deliveryId: row.id, noticeId: row.noticeId, recipientId: row.recipientId, attempt } });
+    });
+  } catch (error) {
+    const message = (error instanceof Error ? error.message : String(error)).slice(0, 500);
+    await db.update(delivery).set({ status: "FAILED", lastError: message, updatedAt: new Date() }).where(eq(delivery.id, row.id));
+    if (attemptRow) await db.update(deliveryAttempt).set({ status: "FAILED", endedAt: new Date() }).where(eq(deliveryAttempt.id, attemptRow.id));
+    throw error;
+  }
 }
 
 async function exportArtifact(job: Job): Promise<void> {

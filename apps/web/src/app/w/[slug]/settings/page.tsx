@@ -84,7 +84,7 @@ export default function SettingsPage() {
         </div>
         <div className="panel-body stack-sm" style={{ maxWidth: "75ch" }}>
           <p>Errata is an editorial correction tool using public financial information and synthetic research examples. It does not provide investment advice. It cannot guarantee completeness or revoke copies outside its managed publishing interface.</p>
-          <p className="muted">This build covers US domestic SEC filers and Markdown or plain-text research. Demo workspaces and their synthetic content are deleted when they expire. Filings are stored as the exact public bytes with their hash.</p>
+          <p className="muted">This build covers US domestic SEC filers and Markdown or plain-text research. Demo workspaces stop opening a day after they start; this build does not yet delete their data on expiry. Filings are stored as the exact public bytes with their hash.</p>
         </div>
       </section>
       {!w?.isReference ? (
