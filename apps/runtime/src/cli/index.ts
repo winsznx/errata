@@ -40,6 +40,9 @@ async function waitQuiet(workspaceId: string, deadline: number): Promise<void> {
   await sleep(3000);
   while (Date.now() < deadline) {
     const running = await db.$count(agentRun, and(eq(agentRun.workspaceId, workspaceId), eq(agentRun.status, "STARTED")));
+    const holding = await db.$count(domainEvent, and(eq(domainEvent.workspaceId, workspaceId), eq(domainEvent.type, "fault.holding")));
+    const released = await db.$count(domainEvent, and(eq(domainEvent.workspaceId, workspaceId), eq(domainEvent.type, "fault.released")));
+    if (holding > released) return;
     quietChecks = running ? 0 : quietChecks + 1;
     if (quietChecks >= 5) return;
     await sleep(2500);
