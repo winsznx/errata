@@ -133,6 +133,20 @@ The amendment-to-draft time for this run was 77 minutes. Most of it went to the 
 
 This run did not reach reissue, and the reason is worth reading. For the table's working capital the Impact Analyst proposed the correct -$123,653, computed in code, three times. The Financial Verifier rejected it each time: once because it mis-transcribed the value, which code caught, and twice because it compared the result with the original $569,032 printed in the note instead of letting code compare it with the proposal. The case stopped in review with no wrong figure published, and the run was resumed once with `--retry-failed` after the first key hit Groq's daily limit. The verify instruction for formulas now says that the printed figure is expected to differ (commit `e45e668`); that change has not been re-run yet.
 
+**Nocera with a bad proposal and a failed check, workspace `nocera-vc4626o`** ([record](evaluation/results/nocera-q1-conflict-2026-11-27T21-55-10-069Z.json)). Labelled fault injection proposes a wrong figure and forces one verifier call to time out. At 21:09:53 UTC the injected proposal put total current assets at 8,269,342. The Financial Verifier read 670,496 from the filing itself, so code rejected the proposal and opened a challenge. The Impact Analyst then proposed 670,496, which was verified, and the challenge was resolved. The forced timeout was retried and recovered.
+
+| Measure | Result |
+| --- | --- |
+| Non-reliance scope | Matched |
+| Affected claims found | 9 of 9, no false positives |
+| Injected wrong figure | Rejected by the verifier's own read of the filing |
+| Replacements verified | 6 of 7 |
+| Agent loops | 17, with 31 overlapping pairs (5,754 s of overlap) |
+| Tokens | 164,229 in, 7,190 out |
+| 8-K released to reader warning | 57 s |
+
+This run did not reach reissue either: the check of the table's working capital, correctly proposed as -$123,653, timed out waiting on the provider and the run reached its time limit.
+
 Earlier files in `evaluation/results` are kept as recorded. `nocera-q1-repair-nocera-01k2xvc.json` stopped with 4 of 7 replacements verified, before the completion reminder and recheck existed. The Joint Corp. and Xencor files ended at the provider's daily token limit before any agent wrote a proposal, so they measure the quota rather than the product.
 
 ![The reissued public note, version 2, with its correction banner and the as-restated sources](docs/screenshots/public-note.png)

@@ -1,0 +1,106 @@
+[
+  {
+    "scenarioId": "nocera-q1-conflict",
+    "run": 1,
+    "model": "groq/openai/gpt-oss-120b",
+    "sdk": "@mozaik-ai/core 4.2.0",
+    "buildCommit": "e604509",
+    "startedAt": "2026-11-27T21:07:33.594Z",
+    "endedAt": "2026-11-27T21:55:09.932Z",
+    "workspace": "nocera-vc4626o",
+    "reissued": 0,
+    "caseStatuses": [
+      "VERIFYING"
+    ],
+    "impact": {
+      "truePositives": 9,
+      "falsePositives": 0,
+      "falseNegatives": 0,
+      "predicted": 9,
+      "groundTruth": 9
+    },
+    "replacements": {
+      "correct": 6,
+      "expected": 7,
+      "rows": [
+        {
+          "label": "Total current assets, March 31, 2025",
+          "expected": "670496",
+          "accepted": "670496",
+          "correct": true
+        },
+        {
+          "label": "Total current liabilities, March 31, 2025",
+          "expected": "794149",
+          "accepted": "794149",
+          "correct": true
+        },
+        {
+          "label": "Working capital, March 31, 2025",
+          "expected": "-123653",
+          "accepted": "-123653",
+          "correct": true
+        },
+        {
+          "label": "Current ratio, March 31, 2025",
+          "expected": "0.8442949622803781154418125565857288745563",
+          "accepted": "0.8442949622803781154418125565857288745563",
+          "correct": true
+        },
+        {
+          "label": "Table: total current assets",
+          "expected": "670496",
+          "accepted": "670496",
+          "correct": true
+        },
+        {
+          "label": "Table: total current liabilities",
+          "expected": "794149",
+          "accepted": "794149",
+          "correct": true
+        },
+        {
+          "label": "Table: working capital",
+          "expected": "-123653",
+          "accepted": null,
+          "correct": false
+        }
+      ],
+      "unsupportedAccepted": 0,
+      "accepted": 6,
+      "rejected": 1
+    },
+    "candidates": [],
+    "falseWarnings": [],
+    "scope": {
+      "matched": true,
+      "found": [
+        "2024-12-31",
+        "2025-03-31",
+        "2025-06-30",
+        "2025-09-30",
+        "2025-12-31"
+      ]
+    },
+    "finalFigureCoverage": {
+      "covered": 7,
+      "total": 7
+    },
+    "concurrency": {
+      "runs": 17,
+      "overlappingRunPairs": 31,
+      "overlapSeconds": 5753.7,
+      "challenges": 1,
+      "staleRejections": 0,
+      "failed": 3
+    },
+    "tokens": {
+      "input": 164229,
+      "output": 7190
+    },
+    "latencySeconds": {
+      "noticeToWarning": 56.5,
+      "amendmentToReadyDraft": null
+    }
+  }
+]
