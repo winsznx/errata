@@ -29,7 +29,7 @@ jobs:
       DATABASE_URL: postgres://errata:errata@localhost:54329/errata
       SEC_USER_AGENT: Errata CI no-network-calls@example.com
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -87,7 +87,7 @@ jobs:
       MODEL_CONCURRENCY_GLOBAL: 2
       SEC_USER_AGENT: Errata CI no-network-calls@example.com
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
