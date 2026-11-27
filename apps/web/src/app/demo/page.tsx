@@ -66,7 +66,7 @@ export default function DemoPage() {
         <div className="stack" style={{ maxWidth: 760 }}>
           <h1 className="serif demo-title">Start a demo workspace</h1>
           <p className="lede">
-            Each workspace replays real SEC filings in the order they became public. The research notes, publisher and recipients are synthetic. The four agents run live on a language model every time; nothing is pre-recorded.
+            Each workspace replays real SEC filings in the order they became public. The research notes, publisher and recipients are synthetic. In every workspace you start, the four agents run live on a language model. The recorded run is one of those live runs, kept as it ended.
           </p>
         </div>
         <ProviderNotice />
