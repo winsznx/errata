@@ -25,38 +25,44 @@ interface Props {
   hideTitle?: boolean;
 }
 
-function segments(text: string, offset: number, claims: ClaimView[]): { text: string; claim: ClaimView | null }[] {
+interface Segment {
+  at: number;
+  text: string;
+  claim: ClaimView | null;
+}
+
+function segments(text: string, offset: number, claims: ClaimView[]): Segment[] {
   const inRange = claims.filter((c) => c.start >= offset && c.end <= offset + text.length).sort((a, b) => a.start - b.start);
-  const out: { text: string; claim: ClaimView | null }[] = [];
+  const out: Segment[] = [];
   let cursor = 0;
   for (const claim of inRange) {
     const start = claim.start - offset;
     const end = claim.end - offset;
     if (start < cursor) continue;
-    if (start > cursor) out.push({ text: text.slice(cursor, start), claim: null });
-    out.push({ text: text.slice(start, end), claim });
+    if (start > cursor) out.push({ at: offset + cursor, text: text.slice(cursor, start), claim: null });
+    out.push({ at: claim.start, text: text.slice(start, end), claim });
     cursor = end;
   }
-  if (cursor < text.length) out.push({ text: text.slice(cursor), claim: null });
+  if (cursor < text.length) out.push({ at: offset + cursor, text: text.slice(cursor), claim: null });
   return out;
 }
 
 export function DocumentView({ blocks, claims, claimStates = {}, selectedClaimId, onSelectClaim, hideTitle }: Props) {
   const render = (text: string, offset: number, blockClaims: ClaimView[]) =>
-    segments(text, offset, blockClaims).map((segment, i) => {
-      if (!segment.claim || segment.claim.category === "OTHER") return <span key={i}>{segment.text}</span>;
+    segments(text, offset, blockClaims).map((segment) => {
+      if (!segment.claim || segment.claim.category === "OTHER") return <span key={segment.at}>{segment.text}</span>;
       const state = claimStates[segment.claim.id] ?? segment.claim.bindingState ?? "";
       const tone = TONE_BY_STATE[state] ?? "bound";
       const label = `${segment.claim.label}${state ? `, ${state.toLowerCase().replace(/_/g, " ")}` : ""}`;
       if (!onSelectClaim) {
         return (
-          <span key={i} className={`claim claim-${tone}`} title={label}>
+          <span key={segment.at} className={`claim claim-${tone}`} title={label}>
             {segment.text}
           </span>
         );
       }
       return (
-        <button key={i} type="button" className={`claim claim-${tone}`} aria-pressed={selectedClaimId === segment.claim.id} aria-label={`${segment.text}: ${label}`} onClick={() => onSelectClaim(segment.claim!.id)}>
+        <button key={segment.at} type="button" className={`claim claim-${tone}`} aria-pressed={selectedClaimId === segment.claim.id} aria-label={`${segment.text}: ${label}`} onClick={() => onSelectClaim(segment.claim!.id)}>
           {segment.text}
         </button>
       );
@@ -85,11 +91,11 @@ export function DocumentView({ blocks, claims, claimStates = {}, selectedClaimId
             <div key={block.id} className="table-wrap">
               <table className="doc-table">
                 <thead>
-                  <tr>{header?.map(({ cell, start }, i) => <th key={i}>{render(cell, start, blockClaims)}</th>)}</tr>
+                  <tr>{header?.map(({ cell, start }) => <th key={start}>{render(cell, start, blockClaims)}</th>)}</tr>
                 </thead>
                 <tbody>
-                  {body.map((row, ri) => (
-                    <tr key={ri}>{row.map(({ cell, start }, i) => <td key={i} className="num">{render(cell, start, blockClaims)}</td>)}</tr>
+                  {body.map((row) => (
+                    <tr key={row[0]?.start}>{row.map(({ cell, start }) => <td key={start} className="num">{render(cell, start, blockClaims)}</td>)}</tr>
                   ))}
                 </tbody>
               </table>
@@ -100,10 +106,10 @@ export function DocumentView({ blocks, claims, claimStates = {}, selectedClaimId
           let offset = 0;
           return (
             <ul key={block.id}>
-              {block.text.split("\n").map((item, i) => {
+              {block.text.split("\n").map((item) => {
                 const start = offset;
                 offset += item.length + 1;
-                return <li key={i}>{render(item, start, blockClaims)}</li>;
+                return <li key={start}>{render(item, start, blockClaims)}</li>;
               })}
             </ul>
           );

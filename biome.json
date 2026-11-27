@@ -1,0 +1,48 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.9/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "apps/**/src/**",
+      "e2e/**",
+      "*.ts",
+      "!**/*.css"
+    ]
+  },
+  "formatter": {
+    "enabled": false
+  },
+  "assist": {
+    "enabled": false
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        "noNonNullAssertion": "off"
+      },
+      "a11y": {
+        "useSemanticElements": "off"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "e2e/**"
+      ],
+      "linter": {
+        "rules": {
+          "performance": {
+            "useDomNodeTextContent": "off"
+          }
+        }
+      }
+    }
+  ]
+}

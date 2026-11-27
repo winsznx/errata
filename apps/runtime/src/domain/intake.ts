@@ -35,7 +35,7 @@ export interface DraftInput {
 
 function validateText(markdown: string): void {
   assert(markdown.trim().length >= 20, "INVALID_INPUT", "the note is empty");
-  assert(!/\u0000/.test(markdown), "INVALID_INPUT", "binary content is not supported; paste or upload UTF-8 text or Markdown");
+  assert(!markdown.includes("\u0000"), "INVALID_INPUT", "binary content is not supported; paste or upload UTF-8 text or Markdown");
 }
 
 async function checkSources(workspaceId: string, sourceIds: string[], asOf: Date): Promise<void> {

@@ -13,9 +13,11 @@
     "errata": "pnpm --filter @errata/runtime cli",
     "test:e2e": "playwright test",
     "test:integration": "pnpm --filter @errata/runtime test:integration",
+    "lint": "biome lint",
     "test:live": "pnpm --filter @errata/runtime cli replay --scenario nocera-q1-repair --approve"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.9",
     "@playwright/test": "1.65.1"
   }
 }

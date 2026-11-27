@@ -465,7 +465,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 
 async function publicReport(publicId: string) {
   const report = await db.query.researchReport.findFirst({ where: eq(researchReport.publicId, z.string().regex(/^[a-z0-9x]{6,16}$/).parse(publicId)) });
-  assert(report && report.publicVisible && report.currentRevisionId && report.documentState !== "DRAFT", "NOT_FOUND", "report not found");
+  assert(report?.publicVisible && report.currentRevisionId && report.documentState !== "DRAFT", "NOT_FOUND", "report not found");
   return report;
 }
 

@@ -22,6 +22,7 @@ export function ExcerptView({ locatorId }: { locatorId: string }) {
               <tr>
                 <th>Row</th>
                 {data.cells.map((c, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: a filing row is a fixed tuple; header text can repeat, the position cannot
                   <th key={i} className="r">
                     {c.column}
                   </th>
@@ -32,6 +33,7 @@ export function ExcerptView({ locatorId }: { locatorId: string }) {
               <tr>
                 <td>{data.rowLabel}</td>
                 {data.cells.map((c, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: same fixed column positions as the header row
                   <td key={i} className="r num">
                     {c.printed}
                   </td>

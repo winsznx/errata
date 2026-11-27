@@ -249,7 +249,7 @@ export function buildTools(ctx: ToolContext): Tool[] {
       description: "For each claim, find facts in eligible filings with the same issuer, concept, period and unit, across as-reported, adjustment and as-restated columns.",
       schema: z.object({ caseId: ID, claimIds: z.array(ID).min(1).max(10) }),
       jsonSchema: { type: "object", properties: { caseId: { type: "string" }, claimIds: { type: "array", items: { type: "string" }, description: "One or more claim ids" } }, required: ["caseId", "claimIds"], additionalProperties: false },
-      run: async ({ caseId, claimIds }) => Object.fromEntries(await Promise.all(claimIds.map(async (claimId) => [claimId, (await findFactCandidates(actor(ctx), { caseId, claimId })).map((f) => ({ factId: f.factId, accession: f.form + " " + f.accession, column: f.column, periodEnd: f.periodEnd, printed: f.rawText, value: f.value, locatorId: f.locatorId }))]))),
+      run: async ({ caseId, claimIds }) => Object.fromEntries(await Promise.all(claimIds.map(async (claimId) => [claimId, (await findFactCandidates(actor(ctx), { caseId, claimId })).map((f) => ({ factId: f.factId, accession: `${f.form} ${f.accession}`, column: f.column, periodEnd: f.periodEnd, printed: f.rawText, value: f.value, locatorId: f.locatorId }))]))),
     }),
     propose_replacement: defineTool(ctx, {
       name: "propose_replacement",
@@ -452,7 +452,7 @@ export function buildTools(ctx: ToolContext): Tool[] {
       jsonSchema: idSchema("candidateId", "Draft (candidate revision) id"),
       run: async ({ candidateId }) => {
         const candidate = await db.query.researchRevision.findFirst({ where: and(eq(researchRevision.id, candidateId), eq(researchRevision.workspaceId, ctx.workspaceId)) });
-        if (!candidate || candidate.kind !== "candidate") throw new DomainError("NOT_FOUND", "draft not found");
+        if (candidate?.kind !== "candidate") throw new DomainError("NOT_FOUND", "draft not found");
         const meta = (candidate.noticeDraft ?? {}) as { changes?: { label: string; previous: string; replacement: string; delta: string }[]; patchedBlockIds?: string[]; notice?: Record<string, string> };
         const rewritten = candidate.blocks.filter((b) => (meta.patchedBlockIds ?? []).some((id) => b.id.startsWith(id)));
         return { candidateId, state: candidate.candidateState, figures: meta.changes ?? [], rewrittenBlocks: rewritten.map((b) => ({ blockId: b.id, kind: b.kind, text: b.text })), notice: meta.notice ?? null };

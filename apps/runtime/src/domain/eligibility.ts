@@ -11,7 +11,7 @@ export async function eligibleSource(tx: DbOrTx, workspaceId: string, sourceId: 
     .innerJoin(sourceDocument, eq(sourceDocument.id, workspaceSource.sourceId))
     .innerJoin(workspace, eq(workspace.id, workspaceSource.workspaceId))
     .where(and(eq(workspaceSource.workspaceId, workspaceId), eq(workspaceSource.sourceId, sourceId)));
-  if (!row || !row.link.eligible) throw new DomainError("INELIGIBLE_SOURCE", "source is not available in this workspace at the current time", { sourceId });
+  if (!row?.link.eligible) throw new DomainError("INELIGIBLE_SOURCE", "source is not available in this workspace at the current time", { sourceId });
   if (row.mode === "replay" && row.logicalTime && row.link.availableAt > row.logicalTime) {
     throw new DomainError("INELIGIBLE_SOURCE", "source was not yet public at the replay clock", { sourceId });
   }

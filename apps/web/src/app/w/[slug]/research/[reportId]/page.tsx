@@ -186,8 +186,8 @@ export default function ResearchDetailPage() {
               <h3>Publication history</h3>
             </div>
             <ol className="plain-list panel-body small">
-              {data.history.map((h, i) => (
-                <li key={i}>
+              {data.history.map((h) => (
+                <li key={`${h.type}:${h.at}`}>
                   <strong>{h.type.charAt(0) + h.type.slice(1).toLowerCase()}</strong> <span className="muted">{fmtDateTime(h.at)}</span>
                   <div className="muted">{h.reason}</div>
                 </li>

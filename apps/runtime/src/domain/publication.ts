@@ -22,7 +22,7 @@ import {
 import { enqueueJob } from "../jobs/outbox.js";
 import { guardEpoch, lockCase, recomputeCaseStatus, type ActorContext } from "./cases.js";
 import { blocksToMarkdown, contentHash, rebuildTableRows, sameEpochVector, scanNumericTokens } from "./document.js";
-import { DomainError, assert } from "./errors.js";
+import { assert } from "./errors.js";
 import { commit } from "./events.js";
 import { displayFormatFor, formatDelta, formatValue } from "./format.js";
 
@@ -404,7 +404,7 @@ export async function reissue(ctx: ActorContext & { actorName: string }, input: 
     assert(candidate.contentHash === input.candidateHash, "CONFLICT", "the draft changed after approval");
     assert(candidate.candidateState === "APPROVED", "APPROVAL_EXPIRED", "the draft is not approved");
     const approval = await tx.query.editorialReview.findFirst({ where: eq(editorialReview.id, input.approvalId) });
-    assert(approval && approval.valid && approval.decision === "approve" && approval.candidateId === candidate.id && approval.contentHash === candidate.contentHash, "APPROVAL_EXPIRED", "the approval no longer matches this draft");
+    assert(approval?.valid && approval.decision === "approve" && approval.candidateId === candidate.id && approval.contentHash === candidate.contentHash, "APPROVAL_EXPIRED", "the approval no longer matches this draft");
     const { blockers, epochVector } = await evaluateCandidate(tx, candidate.id);
     assert(sameEpochVector(epochVector, input.evidenceEpochs) && sameEpochVector(epochVector, approval.epochVector), "STALE_EVIDENCE", "evidence changed after approval", { epochVector });
     assert(blockers.length === 0, "UNVERIFIED_CLAIM", "the draft has unresolved blockers", { blockers });

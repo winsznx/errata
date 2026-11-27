@@ -212,7 +212,7 @@ export async function submitVerification(ctx: ActorContext, input: VerificationI
           continue;
         }
         checks.push({ name: "independent_read", ok: readInRun.has(locatorId), detail: readInRun.has(locatorId) ? "verifier read this excerpt itself in this run" : "verifier did not read this excerpt in this run" });
-        let source;
+        let source: Awaited<ReturnType<typeof eligibleSource>>;
         try {
           source = await eligibleSource(tx, ctx.workspaceId, locator.sourceId);
           checks.push({ name: "eligible_at_replay_clock", ok: true, detail: `${source.form} ${source.accession}` });

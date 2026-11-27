@@ -33,7 +33,7 @@ async function exportArtifact(job: Job): Promise<void> {
 
 export async function retryDelivery(workspaceId: string, deliveryId: string): Promise<void> {
   const row = await db.query.delivery.findFirst({ where: and(eq(delivery.id, deliveryId), eq(delivery.workspaceId, workspaceId)) });
-  if (!row || row.status !== "FAILED") throw new Error("only failed deliveries can be retried");
+  if (row?.status !== "FAILED") throw new Error("only failed deliveries can be retried");
   await db.update(delivery).set({ status: "QUEUED", updatedAt: new Date() }).where(eq(delivery.id, row.id));
   await enqueueJob(db, { workspaceId, kind: "deliver", dedupeKey: `deliver:${row.id}:${row.attemptCount + 1}`, payload: { deliveryId: row.id } });
 }

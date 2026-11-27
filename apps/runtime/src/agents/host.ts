@@ -1,5 +1,5 @@
 import {
-  Agent,
+  type Agent,
   DeveloperMessageItem,
   ModelContext,
   ModelMessageItem,
@@ -255,7 +255,7 @@ export class WorkspaceRuntime {
     const active = this.state.activeRuns.get(runId);
     this.state.activeRuns.delete(runId);
     const row = await db.query.agentRun.findFirst({ where: eq(agentRun.id, runId) });
-    if (!row || row.status !== "STARTED") return;
+    if (row?.status !== "STARTED") return;
     const stale = this.staleRuns.has(runId) || row.outcome === "stale" || /STALE_EVIDENCE/.test(answer);
     const status = stale ? "STALE" : "COMPLETED";
     const outcome = row.outcome ?? (stale ? "stale" : /^Stopped by interception/.test(answer) ? "failed" : "done");
@@ -268,7 +268,7 @@ export class WorkspaceRuntime {
   private async failRun(runId: string, error: ModelCallError): Promise<void> {
     this.state.activeRuns.delete(runId);
     const row = await db.query.agentRun.findFirst({ where: eq(agentRun.id, runId) });
-    if (!row || row.status !== "STARTED") return;
+    if (row?.status !== "STARTED") return;
     const status = error.code === "TIMEOUT" || error.code === "FAULT_INJECTED_TIMEOUT" ? "TIMED_OUT" : "FAILED";
     await db.update(agentRun).set({ status, errorCode: error.code, errorMessage: error.message.slice(0, 500), endedAt: new Date() }).where(eq(agentRun.id, runId));
     await commit(async (_tx, record) => {
@@ -459,7 +459,7 @@ async function planTasks(workspaceId: string, role: AgentRole, type: string, pay
         epoch: null,
         trigger: type,
         message: isAmendment
-          ? `A new amended filing is public: ${source.form} ${source.accession} filed ${source.filedDate} for CIK ${source.cik} (sourceId ${source.id}). Open cases for this issuer: ${JSON.stringify(relatedCases.map((c) => ({ caseId: c.id, title: c.title, periods: c.scope?.periods, scopeConfirmed: c.scopeConfirmed })))}. Call list_source_sections on it with the case's period ends and rowLabel \"total current\" to see the restatement rows. If it restates a period in a case's scope, link it with propose_amendment_link citing one or two as_restated cell locators.`
+          ? `A new amended filing is public: ${source.form} ${source.accession} filed ${source.filedDate} for CIK ${source.cik} (sourceId ${source.id}). Open cases for this issuer: ${JSON.stringify(relatedCases.map((c) => ({ caseId: c.id, title: c.title, periods: c.scope?.periods, scopeConfirmed: c.scopeConfirmed })))}. Call list_source_sections on it with the case's period ends and rowLabel "total current" to see the restatement rows. If it restates a period in a case's scope, link it with propose_amendment_link citing one or two as_restated cell locators.`
           : `A new filing is public: ${source.form} ${source.accession} filed ${source.filedDate} for CIK ${source.cik} (sourceId ${source.id}). Read its Item sections with list_source_sections and read_source_excerpt. If Item 4.02 says financial statements should no longer be relied upon, call propose_disclosure_scope with classification NON_RELIANCE, every named period, and the locators of the paragraphs that name them. Otherwise classify it UNRELATED with a reason.`,
       });
     }

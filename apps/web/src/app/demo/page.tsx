@@ -119,7 +119,7 @@ export default function DemoPage() {
             </section>
           </>
         )}
-        <p className="small muted" style={{ maxWidth: 70 + "ch" }}>
+        <p className="small muted" style={{ maxWidth: "70ch" }}>
           Agent runs use a hosted model on Errata&apos;s key within a demo budget. Not financial advice. Links to sec.gov open the public copies of the filings.
         </p>
       </main>

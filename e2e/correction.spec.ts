@@ -77,7 +77,8 @@ test.describe("editorial review and reissue", () => {
     await expect(page.getByRole("cell", { name: "-$123,653" }).or(page.getByText("-$123,653")).first()).toBeVisible();
 
     // #and exports carry the corrected figures
-    const pdf = await request.get(`${new URL(page.url()).pathname.replace(/\/notices\/.*/, "")}`.replace("/p/", "/api/v1/public/reports/") + "/versions/2/export/pdf");
+    const reportApi = new URL(page.url()).pathname.replace(/\/notices\/.*/, "").replace("/p/", "/api/v1/public/reports/");
+    const pdf = await request.get(`${reportApi}/versions/2/export/pdf`);
     expect(pdf.headers()["content-type"]).toContain("application/pdf");
     expect((await pdf.body()).subarray(0, 5).toString()).toBe("%PDF-");
   });

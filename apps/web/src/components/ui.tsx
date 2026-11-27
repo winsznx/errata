@@ -61,9 +61,9 @@ export function Status({ value, label }: { value: string; label?: string }) {
 
 export function SkeletonRows({ rows = 4 }: { rows?: number }) {
   return (
-    <div className="stack-sm" aria-busy="true" aria-label="Loading">
-      {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="skeleton" style={{ width: `${92 - i * 9}%`, height: 16 }} />
+    <div className="stack-sm" role="status" aria-busy="true" aria-label="Loading">
+      {Array.from({ length: rows }, (_, i) => 92 - i * 9).map((width) => (
+        <div key={width} className="skeleton" style={{ width: `${width}%`, height: 16 }} />
       ))}
     </div>
   );
