@@ -2,12 +2,12 @@ import { execFileSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { runtimeFor, SDK_VERSION } from "../agents/host.js";
+import { REQUIRED_TOOL, runtimeFor, SDK_VERSION } from "../agents/host.js";
 import { runtimeView } from "../api/views.js";
 import { ENV } from "../config/env.js";
 import { db, sqlClient } from "../db/client.js";
 import { runMigrations } from "../db/migrate.js";
-import { agentRun, claim, claimImpact, correctionCase, domainEvent, replacementProposal, researchReport, researchRevision, workspace } from "../db/schema.js";
+import { agentRun, claim, claimImpact, correctionCase, domainEvent, replacementProposal, researchReport, researchRevision, toolCall, workspace } from "../db/schema.js";
 import { advanceReplay } from "../domain/cases.js";
 import { scanNumericTokens } from "../domain/document.js";
 import { sameDecimal } from "../domain/locator.js";
@@ -24,7 +24,9 @@ Commands:
   verify-sources [--live]                 Re-hash every snapshot in datasets/provenance.json; with --live, re-fetch each from sec.gov and compare.
   scenarios                               List replay scenarios.
   resume --workspace <slug> [--approve]   Recreate a workspace's runtime from stored state and let pending work finish.
-         [--recheck]                      --recheck asks for another check of proposals whose automatic checks ended without a verdict.
+         [--recheck] [--retry-failed]     --recheck asks for another check of proposals whose automatic checks ended without a verdict.
+                                          --retry-failed retries every task whose latest attempt failed and which never completed,
+                                          as an operator would with the Retry button.
   replay --scenario <id> [--approve]      Run a scenario end to end with live agents. --approve acts as a synthetic CLI editor
          [--timeout <seconds>]            to approve and reissue a ready draft. Prints the workspace slug for the web UI.
   evaluate --scenario <id> [--runs <n>]   Run the scenario n times with --approve, then score each run against
@@ -252,7 +254,27 @@ async function main(): Promise<void> {
     const ws = slug ? await db.query.workspace.findFirst({ where: eq(workspace.slug, slug) }) : null;
     if (!ws) throw new Error("workspace not found");
     console.log(`resuming ${ws.slug}: recreating its Mozaik runtime from stored state`);
-    await runtimeFor(ws.id);
+    const runtime = await runtimeFor(ws.id);
+    if (process.argv.includes("--retry-failed")) {
+      const runs = await db.select().from(agentRun).where(eq(agentRun.workspaceId, ws.id)).orderBy(asc(agentRun.startedAt));
+      const latest = new Map(runs.map((r) => [r.taskKey, r]));
+      const cases = new Map((await db.select().from(correctionCase).where(eq(correctionCase.workspaceId, ws.id))).map((c) => [c.id, c]));
+      const proposals = new Map((await db.select().from(replacementProposal).where(eq(replacementProposal.workspaceId, ws.id))).map((p) => [p.id, p]));
+      for (const run of latest.values()) {
+        const completed = runs.some((r) => r.taskKey === run.taskKey && r.status === "COMPLETED");
+        if (completed || !["FAILED", "TIMED_OUT"].includes(run.status)) continue;
+        const caseRow = run.caseId ? cases.get(run.caseId) : undefined;
+        if (caseRow && run.epoch !== null && run.epoch !== caseRow.evidenceEpoch) continue;
+        const verifiedProposal = run.taskKey.startsWith("verify:") ? proposals.get(run.taskKey.split(":")[1] ?? "") : undefined;
+        if (verifiedProposal && verifiedProposal.status !== "PROPOSED") continue;
+        const kind = run.trigger.startsWith("{") ? (JSON.parse(run.trigger) as { kind?: string }).kind : undefined;
+        const recordingTool = kind ? REQUIRED_TOOL[kind] : undefined;
+        const sameTask = runs.filter((r) => r.taskKey === run.taskKey).map((r) => r.id);
+        if (recordingTool && (await db.$count(toolCall, and(inArray(toolCall.agentRunId, sameTask), eq(toolCall.toolName, recordingTool), eq(toolCall.ok, true))))) continue;
+        const relaunched = await runtime.retry(run.id);
+        console.log(`${relaunched ? "retried" : "could not retry"} ${run.role} ${run.taskKey}`);
+      }
+    }
     if (process.argv.includes("--recheck")) {
       const pending = await db
         .select({ proposal: replacementProposal })

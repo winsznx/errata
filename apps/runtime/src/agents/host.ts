@@ -113,7 +113,7 @@ export function verifyTask(proposal: { id: string; kind: string; proposerAgent: 
 }
 
 /** The write each task exists to make. A loop that ends without it gets one reminder before it may finish. */
-const REQUIRED_TOOL: Record<string, string> = {
+export const REQUIRED_TOOL: Record<string, string> = {
   classify_filing: "propose_disclosure_scope",
   link_amendment: "propose_amendment_link",
   check_scope: "check_disclosure_scope",
