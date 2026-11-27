@@ -124,14 +124,15 @@ The amendment-to-draft time for this run was 77 minutes. Most of it went to the 
 | Non-reliance scope | Matched |
 | Affected claims found | 9 of 9, no false positives |
 | Stale results rejected | 2 |
-| Replacements verified | 6 of 7 when the run stopped |
+| Replacements verified | 6 of 7 |
+| Challenges between agents | 3 |
 | Roundup that only mentions Nocera | Correctly cleared as unaffected |
 | Warnings on unaffected notes | None |
-| Agent loops | 18, with 28 overlapping pairs |
-| Tokens | 151,004 in, 7,412 out |
+| Agent loops | 23, with 32 overlapping pairs |
+| Tokens | 230,776 in, 10,118 out |
 | 8-K released to reader warning | 57 s |
 
-This run did not reach reissue. The check of the last formula, the table's working capital, timed out while every call waited on Groq's daily token limit, and a retry hit the same limit.
+This run did not reach reissue, and the reason is worth reading. For the table's working capital the Impact Analyst proposed the correct -$123,653, computed in code, three times. The Financial Verifier rejected it each time: once because it mis-transcribed the value, which code caught, and twice because it compared the result with the original $569,032 printed in the note instead of letting code compare it with the proposal. The case stopped in review with no wrong figure published, and the run was resumed once with `--retry-failed` after the first key hit Groq's daily limit. The verify instruction for formulas now says that the printed figure is expected to differ (commit `e45e668`); that change has not been re-run yet.
 
 Earlier files in `evaluation/results` are kept as recorded. `nocera-q1-repair-nocera-01k2xvc.json` stopped with 4 of 7 replacements verified, before the completion reminder and recheck existed. The Joint Corp. and Xencor files ended at the provider's daily token limit before any agent wrote a proposal, so they measure the quota rather than the product.
 

@@ -3,10 +3,10 @@
   "workspace": "nocera-xwn01dk",
   "model": "groq/openai/gpt-oss-120b",
   "sdk": "@mozaik-ai/core 4.2.0",
-  "buildCommit": "dd349c7",
-  "scoredAt": "2026-11-27T16:11:10.861Z",
+  "buildCommit": "e45e668",
+  "scoredAt": "2026-11-27T21:07:13.686Z",
   "caseStatuses": [
-    "VERIFYING"
+    "NEEDS_REVIEW"
   ],
   "impact": {
     "truePositives": 9,
@@ -64,7 +64,7 @@
     ],
     "unsupportedAccepted": 0,
     "accepted": 7,
-    "rejected": 0
+    "rejected": 3
   },
   "candidates": [
     {
@@ -89,16 +89,16 @@
     "total": 10
   },
   "concurrency": {
-    "runs": 19,
-    "overlappingRunPairs": 28,
-    "overlapSeconds": 2517.9,
-    "challenges": 0,
+    "runs": 23,
+    "overlappingRunPairs": 32,
+    "overlapSeconds": 2763.8,
+    "challenges": 3,
     "staleRejections": 2,
     "failed": 5
   },
   "tokens": {
-    "input": 152106,
-    "output": 7469
+    "input": 230776,
+    "output": 10118
   },
   "latencySeconds": {
     "noticeToWarning": 56.5,
