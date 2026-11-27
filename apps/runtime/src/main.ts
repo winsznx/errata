@@ -1,3 +1,4 @@
+import { resumeInterruptedWorkspaces } from "./agents/host.js";
 import { ENV } from "./config/env.js";
 import { sqlClient } from "./db/client.js";
 import { runMigrations } from "./db/migrate.js";
@@ -13,6 +14,11 @@ const app = await buildServer();
 const workers = startWorkers({ liveMonitor: ENV.ENABLE_LIVE_MONITOR });
 await app.listen({ port: ENV.RUNTIME_PORT, host: ENV.RUNTIME_HOST });
 app.log.info({ build: ENV.BUILD_COMMIT, model: ENV.MODEL_ID }, "errata runtime ready");
+if (ENV.RESUME_INTERRUPTED_ON_BOOT) {
+  resumeInterruptedWorkspaces()
+    .then((count) => count && app.log.info({ workspaces: count }, "resumed workspaces with interrupted agent loops"))
+    .catch((error: unknown) => app.log.error({ error }, "could not resume interrupted workspaces"));
+}
 
 async function shutdown(signal: string): Promise<void> {
   app.log.info({ signal }, "shutting down");

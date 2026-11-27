@@ -16,7 +16,7 @@ import {
   type SituationHandler,
   type Tool,
 } from "@mozaik-ai/core";
-import { and, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { ENV } from "../config/env.js";
 import { db } from "../db/client.js";
 import { agentRun, caseSource, toolCall, claim, claimImpact, correctionCase, disclosureEvent, replacementProposal, researchReport, researchRevision, runtimeSession, sourceDocument, workspace } from "../db/schema.js";
@@ -178,10 +178,11 @@ export class WorkspaceRuntime {
       .values({ workspaceId: this.workspaceId, sdkVersion: SDK_VERSION, model: ENV.MODEL_ID, leaseFence: Number(fence?.next ?? 1), leaseHolder: `pid:${process.pid}`, leaseUntil: new Date(Date.now() + 45_000), status: "ACTIVE" })
       .returning();
     this.sessionId = session!.id;
-    await db
+    const interrupted = await db
       .update(agentRun)
       .set({ status: "FAILED", errorCode: "RUNTIME_RESTARTED", errorMessage: "The runtime restarted while this loop was running; a fresh attempt replaces it", endedAt: new Date() })
-      .where(and(eq(agentRun.workspaceId, this.workspaceId), eq(agentRun.status, "STARTED")));
+      .where(and(eq(agentRun.workspaceId, this.workspaceId), eq(agentRun.status, "STARTED")))
+      .returning({ id: agentRun.id, attempt: agentRun.attempt });
 
     this.unsubscribe = eventBus.onCommitted((event) => {
       if (event.workspaceId !== this.workspaceId) return;
@@ -192,6 +193,7 @@ export class WorkspaceRuntime {
       await record({ workspaceId: this.workspaceId, type: "runtime.started", actor: { kind: "system", id: "runtime" }, payload: { runtimeSessionId: this.sessionId, sdkVersion: SDK_VERSION, model: ENV.MODEL_ID, participants: [...this.agents.keys(), "errata-host", "human-editor"] } });
     });
     this.rt.sendEvent(SemanticEvent.create("runtime.reconcile", this.host.getId(), { reason: "runtime started" }), this.host.getId());
+    for (const run of interrupted) if (run.attempt < MAX_RESTART_ATTEMPTS) await this.retry(run.id);
   }
 
   stop(): void {
@@ -580,6 +582,20 @@ async function planTasks(workspaceId: string, role: AgentRole, type: string, pay
 }
 
 const runtimes = new Map<string, Promise<WorkspaceRuntime>>();
+
+/** A loop interrupted by a restart is relaunched as its next attempt, up to this attempt number, so a loop that keeps crashing the process cannot restart forever. */
+const MAX_RESTART_ATTEMPTS = 3;
+
+/** Brings back the runtime of every unexpired workspace that had a loop running when the process stopped. */
+export async function resumeInterruptedWorkspaces(): Promise<number> {
+  const rows = await db
+    .selectDistinct({ id: workspace.id })
+    .from(agentRun)
+    .innerJoin(workspace, eq(workspace.id, agentRun.workspaceId))
+    .where(and(eq(agentRun.status, "STARTED"), or(isNull(workspace.expiresAt), gt(workspace.expiresAt, new Date()))));
+  for (const row of rows) await runtimeFor(row.id);
+  return rows.length;
+}
 
 export async function runtimeFor(workspaceId: string): Promise<WorkspaceRuntime> {
   let pending = runtimes.get(workspaceId);

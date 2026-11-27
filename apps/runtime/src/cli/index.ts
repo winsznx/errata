@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
@@ -38,6 +39,18 @@ function arg(name: string): string | undefined {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** The commit a result was produced from. Outside a container BUILD_COMMIT is unset, so read it from git and say when the tree had changes. */
+function buildCommit(): string {
+  if (ENV.BUILD_COMMIT !== "local") return ENV.BUILD_COMMIT;
+  try {
+    const head = execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim();
+    const dirty = execFileSync("git", ["status", "--porcelain", "--untracked-files=no"], { encoding: "utf8" }).trim();
+    return dirty ? `${head}-dirty` : head;
+  } catch {
+    return "local";
+  }
+}
 
 async function waitQuiet(workspaceId: string, deadline: number): Promise<void> {
   let quietChecks = 0;
@@ -225,7 +238,7 @@ async function main(): Promise<void> {
       const outcome = await replay(scenarioId, { approve: true, timeoutSeconds: Number(arg("timeout") ?? 900), log: true });
       const expected = JSON.parse(await readFile(resolve(datasetsDir(), "evaluation", `${scenarioId}.expected.json`), "utf8")) as Expected;
       const scored = await score(outcome.workspaceId, expected);
-      const record = { scenarioId, run: i + 1, model: `${ENV.MODEL_PROVIDER}/${ENV.MODEL_ID}`, sdk: SDK_VERSION, buildCommit: ENV.BUILD_COMMIT, startedAt: outcome.startedAt.toISOString(), endedAt: outcome.endedAt.toISOString(), workspace: outcome.slug, reissued: outcome.reissued, caseStatuses: outcome.caseStatuses, ...scored };
+      const record = { scenarioId, run: i + 1, model: `${ENV.MODEL_PROVIDER}/${ENV.MODEL_ID}`, sdk: SDK_VERSION, buildCommit: buildCommit(), startedAt: outcome.startedAt.toISOString(), endedAt: outcome.endedAt.toISOString(), workspace: outcome.slug, reissued: outcome.reissued, caseStatuses: outcome.caseStatuses, ...scored };
       results.push(record);
       console.log(JSON.stringify(record, null, 2));
     }
@@ -267,7 +280,7 @@ async function main(): Promise<void> {
     const expected = JSON.parse(await readFile(resolve(datasetsDir(), "evaluation", `${ws.scenarioId}.expected.json`), "utf8")) as Expected;
     const scored = await score(ws.id, expected);
     const cases = await db.select().from(correctionCase).where(eq(correctionCase.workspaceId, ws.id));
-    const record = { scenarioId: ws.scenarioId, workspace: ws.slug, model: `${ENV.MODEL_PROVIDER}/${ENV.MODEL_ID}`, sdk: SDK_VERSION, scoredAt: new Date().toISOString(), caseStatuses: cases.map((c) => c.status), ...scored };
+    const record = { scenarioId: ws.scenarioId, workspace: ws.slug, model: `${ENV.MODEL_PROVIDER}/${ENV.MODEL_ID}`, sdk: SDK_VERSION, buildCommit: buildCommit(), scoredAt: new Date().toISOString(), caseStatuses: cases.map((c) => c.status), ...scored };
     const outDir = resolve(process.cwd(), "../../evaluation/results");
     await mkdir(outDir, { recursive: true });
     const file = resolve(outDir, `${ws.scenarioId}-${ws.slug}.json`);

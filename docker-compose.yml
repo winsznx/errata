@@ -28,6 +28,7 @@ services:
       DATABASE_URL: postgres://errata:errata@db:5432/errata
       APP_BASE_URL: http://localhost:3000
       NODE_ENV: ${ERRATA_NODE_ENV:-development}
+      RESUME_INTERRUPTED_ON_BOOT: "true"
     volumes:
       - errata-storage:/srv/storage
       - ${HOME}/.mozaik:/home/node/.mozaik:ro

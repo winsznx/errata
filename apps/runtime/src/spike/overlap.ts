@@ -14,6 +14,7 @@ import {
   type SituationHandler,
 } from "@mozaik-ai/core";
 import { modelRegistry } from "../agents/model.js";
+import { ENV } from "../config/env.js";
 
 class SpikeState extends RuntimeState {
   epoch = 1;
@@ -32,7 +33,7 @@ class OnType extends SituationSpecification {
   }
 }
 
-const model = process.env.SPIKE_MODEL ?? process.env.MODEL_ID ?? "gpt-5.4";
+const model = process.env.SPIKE_MODEL ?? ENV.MODEL_ID;
 
 function freshContext(agent: Agent): ModelContext {
   return ModelContext.rehydrate({
