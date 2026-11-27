@@ -1,6 +1,6 @@
 import "@fastify/cookie";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { ENV } from "../config/env.js";
 import { db } from "../db/client.js";
@@ -86,15 +86,20 @@ export async function withIdempotency<T>(workspaceId: string, operation: string,
   if (!key) throw new DomainError("INVALID_INPUT", "Idempotency-Key header is required for this action");
   if (key.length > 200) throw new DomainError("INVALID_INPUT", "Idempotency-Key is too long");
   const payloadHash = hashToken(JSON.stringify(payload));
-  const existing = await db.query.idempotencyRecord.findFirst({ where: and(eq(idempotencyRecord.workspaceId, workspaceId), eq(idempotencyRecord.operation, operation), eq(idempotencyRecord.key, key)) });
-  if (existing) {
-    if (existing.payloadHash !== payloadHash) throw new DomainError("IDEMPOTENCY_MISMATCH", "this Idempotency-Key was already used with a different request");
-    return existing.result as T;
-  }
-  const result = await run();
-  await db
-    .insert(idempotencyRecord)
-    .values({ workspaceId, operation, key, payloadHash, result: result as unknown, statusCode: 200, expiresAt: new Date(Date.now() + 86_400_000) })
-    .onConflictDoNothing();
-  return result;
+  // The advisory lock lives on this transaction's connection until it ends, so a second request with the same key
+  // waits here and then finds the first one's stored result instead of running the action again.
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${workspaceId}:${operation}:${key}`}, 0))`);
+    const existing = await tx.query.idempotencyRecord.findFirst({ where: and(eq(idempotencyRecord.workspaceId, workspaceId), eq(idempotencyRecord.operation, operation), eq(idempotencyRecord.key, key)) });
+    if (existing) {
+      if (existing.payloadHash !== payloadHash) throw new DomainError("IDEMPOTENCY_MISMATCH", "this Idempotency-Key was already used with a different request");
+      return existing.result as T;
+    }
+    const result = await run();
+    await tx
+      .insert(idempotencyRecord)
+      .values({ workspaceId, operation, key, payloadHash, result: result as unknown, statusCode: 200, expiresAt: new Date(Date.now() + 86_400_000) })
+      .onConflictDoNothing();
+    return result;
+  });
 }
