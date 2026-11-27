@@ -19,7 +19,7 @@ import {
 import { and, eq, gt, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { ENV } from "../config/env.js";
 import { db } from "../db/client.js";
-import { agentRun, caseSource, toolCall, claim, claimImpact, correctionCase, disclosureEvent, replacementProposal, researchReport, researchRevision, runtimeSession, sourceDocument, workspace } from "../db/schema.js";
+import { agentRun, caseSource, challenge, toolCall, claim, claimImpact, correctionCase, disclosureEvent, replacementProposal, researchReport, researchRevision, runtimeSession, sourceDocument, workspace } from "../db/schema.js";
 import { commit, eventBus, serializeEvent, type CommittedEvent } from "../domain/events.js";
 import type { ScenarioFault } from "../domain/scenarios.js";
 import { injectWrongPeriodProposal } from "../domain/faults.js";
@@ -131,7 +131,7 @@ const TRIGGERS: Record<AgentRole, string[]> = {
   "filing-monitor": ["filing.discovered", "filing.non_reliance_detected", "challenge.raised", "runtime.reconcile"],
   "financial-verifier": ["filing.scope_proposed", "claim.replacement_proposed", "verification.recheck_requested", "report.binding_check_requested", "report.revision_prepared", "runtime.reconcile"],
   "impact-analyst": ["report.extraction_requested", "filing.non_reliance_detected", "evidence.superseded", "claim.verified", "claim.rejected", "challenge.raised", "runtime.reconcile"],
-  "publication-editor": ["report.warning_applied", "claim.verified", "case.status_changed", "report.changes_requested", "runtime.reconcile"],
+  "publication-editor": ["report.warning_applied", "claim.verified", "case.status_changed", "report.changes_requested", "challenge.raised", "runtime.reconcile"],
 };
 
 export class WorkspaceRuntime {
@@ -560,8 +560,26 @@ async function planTasks(workspaceId: string, role: AgentRole, type: string, pay
     if (type === "report.warning_applied" && payload.warningType === "NON_RELIANCE" && caseId) {
       tasks.push({ kind: "write_warning", key: `warning:${String(payload.reportId)}:${caseId}`, caseId, epoch: await caseEpoch(caseId), trigger: type, message: `A non-reliance warning was applied to report ${String(payload.reportId)} (case ${caseId}). Read the case with get_case and write a short reader-facing explanation with propose_warning_text: what the issuer disclosed, that corrected figures are not yet available if no amendment is linked, and that the original text stays visible. No figures.` });
     }
-    if (type === "challenge.raised" && payload.targetKind === "candidate_conclusion") {
-      tasks.push({ kind: "revise_draft", key: `revise-conclusion:${String(payload.challengeId)}`, caseId, epoch: caseId ? await caseEpoch(caseId) : null, trigger: type, message: `The Financial Verifier found the conclusions in your draft ${String(payload.targetId)} for report ${String(payload.reportId)} inconsistent with the verified figures: "${String(payload.explanation)}". Read the figures with get_draft_for_review and the note with get_report_for_editing, then submit a corrected propose_revision_patch whose conclusions follow from the verified values.` });
+    const conclusionChallenges = await db
+      .select({ challenge, draft: researchRevision })
+      .from(challenge)
+      .innerJoin(researchRevision, sql`${researchRevision.id}::text = ${challenge.targetId}`)
+      .where(and(eq(challenge.workspaceId, workspaceId), eq(challenge.targetKind, "candidate_conclusion"), eq(challenge.status, "OPEN"), inArray(researchRevision.candidateState, ["READY", "BLOCKED", "CHECKING"])));
+    const blockedDrafts = await db
+      .select()
+      .from(researchRevision)
+      .where(and(eq(researchRevision.workspaceId, workspaceId), eq(researchRevision.kind, "candidate"), eq(researchRevision.candidateState, "BLOCKED")));
+    for (const draft of blockedDrafts) {
+      const meta = (draft.noticeDraft ?? {}) as { blockers?: string[] };
+      const unwritten = (meta.blockers ?? []).filter((b) => b.includes("has not been rewritten"));
+      if (!unwritten.length || !draft.caseId) continue;
+      const epoch = await caseEpoch(draft.caseId);
+      const draftsThisRevision = await db.$count(researchRevision, and(eq(researchRevision.reportId, draft.reportId), eq(researchRevision.kind, "candidate"), eq(researchRevision.caseId, draft.caseId), sql`${researchRevision.epochVector} @> ${JSON.stringify([{ caseId: draft.caseId, epoch }])}::jsonb`));
+      if (draftsThisRevision >= 3) continue;
+      tasks.push({ kind: "revise_draft", key: `revise-unwritten:${draft.id}`, caseId: draft.caseId, epoch, trigger: type, message: `Your draft ${draft.id} for report ${draft.reportId} is blocked: ${unwritten.join("; ")}. Read the note with get_report_for_editing and submit a revised propose_revision_patch that keeps your earlier changes and also rewrites those blocks so they are true on the verified figures.` });
+    }
+    for (const { challenge: raised, draft } of conclusionChallenges) {
+      tasks.push({ kind: "revise_draft", key: `revise-conclusion:${raised.id}`, caseId: raised.caseId, epoch: await caseEpoch(raised.caseId), trigger: type, message: `The Financial Verifier found the conclusions in your draft ${draft.id} for report ${draft.reportId} inconsistent with the verified figures: "${raised.explanation}". Read the figures with get_draft_for_review and the note with get_report_for_editing, then submit a corrected propose_revision_patch whose conclusions and notice follow from the verified values.` });
     }
     if (type === "report.changes_requested") {
       tasks.push({ kind: "revise_draft", key: `revise:${String(payload.reviewId)}`, caseId, epoch: caseId ? await caseEpoch(caseId) : null, trigger: type, message: `A human editor requested changes to draft ${String(payload.candidateId)} for report ${String(payload.reportId)}: "${String(payload.notes ?? "")}". Read the report with get_report_for_editing and submit a revised propose_revision_patch that addresses the notes.` });
