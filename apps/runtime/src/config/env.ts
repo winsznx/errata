@@ -36,6 +36,8 @@ const ENV_SCHEMA = z.object({
   MODEL_MAX_CALLS_PER_RUN: intFromEnv(400),
   MODEL_DAILY_BUDGET_CALLS: intFromEnv(4000),
   MAX_TOOL_CALLS_PER_LOOP: intFromEnv(20),
+  MODEL_REQUEST_TOKEN_LIMIT: z.coerce.number().int().min(0).default(0),
+  MAX_TOOL_RESULT_CHARS: intFromEnv(9000),
   DEMO_TTL_HOURS: intFromEnv(24),
   DEMO_SESSION_LIMIT_PER_HOUR: intFromEnv(30),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),

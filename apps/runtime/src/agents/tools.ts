@@ -1,6 +1,7 @@
 import type { Tool } from "@mozaik-ai/core";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { ENV } from "../config/env.js";
 import { db } from "../db/client.js";
 import { agentRun, correctionCase, toolCall, workspace } from "../db/schema.js";
 import { checkDisclosureScope, linkAmendment, proposeDisclosureScope, type ActorContext } from "../domain/cases.js";
@@ -139,7 +140,11 @@ function defineTool<S extends z.ZodTypeAny>(ctx: ToolContext, spec: { name: stri
         endedAt: new Date(),
       });
       await db.update(agentRun).set({ heartbeatAt: new Date() }).where(eq(agentRun.id, ctx.agentRunId));
-      return JSON.stringify({ ...result, epoch: ctx.epoch });
+      const serialized = JSON.stringify({ ...result, epoch: ctx.epoch });
+      if (serialized.length > ENV.MAX_TOOL_RESULT_CHARS) {
+        return JSON.stringify({ ok: false, error: { code: "RESULT_TOO_LARGE", message: `The result was ${serialized.length} characters, above the ${ENV.MAX_TOOL_RESULT_CHARS} character limit. Call the tool again with narrower arguments, such as specific period ends or a row label.` }, epoch: ctx.epoch });
+      }
+      return serialized;
     },
   };
 }

@@ -106,8 +106,21 @@ export async function sourceSections(workspaceId: string, sourceId: string, opti
   return {
     source: { sourceId: source.id, accession: source.accession, form: source.form, filedDate: source.filedDate, cik: source.cik },
     textSections: source.form.startsWith("8-K") ? textLocators.map((l) => ({ locatorId: l.id, item: (l.path as { item: string }).item, preview: l.excerpt.slice(0, 200) })) : [],
-    tables: [...tables.values()].slice(0, 6).map((t) => ({ tableIndex: t.tableIndex, periodEnds: [...t.periodEnds].sort(), rows: [...t.rows.values()].slice(0, 30) })),
-    note: "Each table cell has its own locator. Cite the locator of the cell you read, for example the as_restated column for a corrected figure.",
+    tables: [...tables.values()].slice(0, 6).map((t) => {
+      const rows = [...t.rows.values()];
+      const narrowed = Boolean(options.rowQuery);
+      return {
+        tableIndex: t.tableIndex,
+        periodEnds: [...t.periodEnds].sort(),
+        columns: [...new Set(rows.flatMap((r) => r.cells.map((c) => c.column)))],
+        rowCount: rows.length,
+        rows: narrowed ? rows.slice(0, 12).map((r) => ({ label: r.label, cells: r.cells.map((c) => [c.column, c.periodEnd, c.locatorId]) })) : undefined,
+        rowLabels: narrowed ? undefined : rows.slice(0, 25).map((r) => r.label),
+      };
+    }),
+    note: options.rowQuery
+      ? "Cells are [column, periodEnd, locatorId]. Each cell has its own locator; cite the one you read, for example the as_restated cell for a corrected figure."
+      : "Row labels only. Call again with rowLabel (and periodEnds) to get the cell locators for specific rows.",
   };
 }
 

@@ -14,6 +14,7 @@ import {
   type InterceptionHandler,
   type SituationContext,
   type SituationHandler,
+  type Tool,
 } from "@mozaik-ai/core";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { ENV } from "../config/env.js";
@@ -21,6 +22,7 @@ import { db } from "../db/client.js";
 import { agentRun, caseSource, claim, claimImpact, correctionCase, disclosureEvent, replacementProposal, researchReport, researchRevision, runtimeSession, sourceDocument, workspace } from "../db/schema.js";
 import { commit, eventBus, serializeEvent, type CommittedEvent } from "../domain/events.js";
 import type { ScenarioFault } from "../domain/scenarios.js";
+import { fitContext } from "./context-budget.js";
 import { guardedRunner, type ModelCallError } from "./model.js";
 import { AGENT_CAPABILITIES, AGENT_ROLES, ROLE_INSTRUCTIONS, type AgentRole } from "./prompts.js";
 import { buildTools } from "./tools.js";
@@ -267,7 +269,7 @@ export class WorkspaceRuntime {
     for (const task of tasks) await this.launch(role, task, 1);
   }
 
-  private interception(runId: string, caseId: string | null, epoch: number | null): InterceptionHandler {
+  private interception(runId: string, caseId: string | null, epoch: number | null, context: ModelContext, tools: Tool[]): InterceptionHandler {
     let functionCalls = 0;
     const stop = (text: string): ExecutableTransition => ({ nextStateId: "model_message", input: { answer: ModelMessageItem.rehydrate({ text }) } });
     return {
@@ -278,6 +280,14 @@ export class WorkspaceRuntime {
         if (current && epoch !== null && current.epoch > epoch) {
           this.staleRuns.add(runId);
           return stop(`Stopped by interception: the case moved from evidence revision ${epoch} to ${current.epoch} before this step, so this loop's remaining work is stale.`);
+        }
+        if (transition.nextStateId === "inference" && ENV.MODEL_REQUEST_TOKEN_LIMIT > 0) {
+          const fit = fitContext(context, tools, ENV.MODEL_REQUEST_TOKEN_LIMIT);
+          if (fit.compacted) await db.update(agentRun).set({ heartbeatAt: new Date() }).where(eq(agentRun.id, runId));
+          if (!fit.fits) {
+            await db.update(agentRun).set({ outcome: "failed", summary: `Stopped by interception: the request would be about ${fit.estimate} tokens, above the provider's ${ENV.MODEL_REQUEST_TOKEN_LIMIT} limit even after omitting older tool results` }).where(eq(agentRun.id, runId));
+            return stop(`Stopped by interception: this loop's context no longer fits the provider's request size limit.`);
+          }
         }
         if (functionCalls > ENV.MAX_TOOL_CALLS_PER_LOOP) {
           await db.update(agentRun).set({ outcome: "failed", summary: `Stopped by interception after ${ENV.MAX_TOOL_CALLS_PER_LOOP} tool calls` }).where(eq(agentRun.id, runId));
@@ -344,7 +354,7 @@ export class WorkspaceRuntime {
         originalLog(...args);
       };
       try {
-        this.rt.runLoop(agent.getId(), message, { model: ENV.MODEL_ID, maxOutputTokens: ENV.MODEL_MAX_OUTPUT_TOKENS, tools, context }, this.interception(runId, task.caseId, task.epoch));
+        this.rt.runLoop(agent.getId(), message, { model: ENV.MODEL_ID, maxOutputTokens: ENV.MODEL_MAX_OUTPUT_TOKENS, tools, context }, this.interception(runId, task.caseId, task.epoch, context, tools));
       } finally {
         console.log = originalLog;
       }
@@ -401,7 +411,7 @@ async function planTasks(workspaceId: string, role: AgentRole, type: string, pay
         epoch: null,
         trigger: type,
         message: isAmendment
-          ? `A new amended filing is public: ${source.form} ${source.accession} filed ${source.filedDate} for CIK ${source.cik} (sourceId ${source.id}). Open cases for this issuer: ${JSON.stringify(relatedCases.map((c) => ({ caseId: c.id, title: c.title, periods: c.scope?.periods, scopeConfirmed: c.scopeConfirmed })))}. Inspect its restatement tables with list_source_sections and, if it restates periods in a case's scope, link it with propose_amendment_link citing the restatement table row locators.`
+          ? `A new amended filing is public: ${source.form} ${source.accession} filed ${source.filedDate} for CIK ${source.cik} (sourceId ${source.id}). Open cases for this issuer: ${JSON.stringify(relatedCases.map((c) => ({ caseId: c.id, title: c.title, periods: c.scope?.periods, scopeConfirmed: c.scopeConfirmed })))}. Call list_source_sections on it with the case's period ends and rowLabel \"total current\" to see the restatement rows. If it restates a period in a case's scope, link it with propose_amendment_link citing one or two as_restated cell locators.`
           : `A new filing is public: ${source.form} ${source.accession} filed ${source.filedDate} for CIK ${source.cik} (sourceId ${source.id}). Read its Item sections with list_source_sections and read_source_excerpt. If Item 4.02 says financial statements should no longer be relied upon, call propose_disclosure_scope with classification NON_RELIANCE, every named period, and the locators of the paragraphs that name them. Otherwise classify it UNRELATED with a reason.`,
       });
     }
