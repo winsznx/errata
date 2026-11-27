@@ -1,0 +1,12 @@
+{
+  "scenarioId": "joint-q1-repair",
+  "note": "Manual ground truth from 10-Q 0001628280-25-023983 and 10-Q/A 0001612630-25-000035. The amendment restates current assets but not current liabilities, which must be verified as unchanged.",
+  "affectedClaims": [
+    { "report": "The Joint Corp.", "label": "Total current assets, March 31, 2025", "kind": "fact", "expected": "70730694" },
+    { "report": "The Joint Corp.", "label": "Total current liabilities, March 31, 2025", "kind": "unchanged", "expected": "42707086" },
+    { "report": "The Joint Corp.", "label": "Working capital, March 31, 2025", "kind": "formula", "expected": "28023608" }
+  ],
+  "candidateClaims": [],
+  "unaffectedReports": [],
+  "expectedScopePeriodEnds": ["2024-12-31", "2025-03-31"]
+}

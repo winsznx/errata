@@ -4,7 +4,8 @@ import { ENV } from "../config/env.js";
 import { db } from "../db/client.js";
 import { disclosureEvent, sourceDocument, watchSubscription, workspace, workspaceSource } from "../db/schema.js";
 import { commit } from "../domain/events.js";
-import { putBlob, sha256 } from "./blob-store.js";
+import { putBlob } from "./blob-store.js";
+import { filingHash } from "./canonical.js";
 import { PARSE_VERSION, extractStoredSource } from "./ingest.js";
 import { archiveUrl, padCik, secFetch } from "./sec-client.js";
 
@@ -104,7 +105,7 @@ export async function pollWatchlists(options: { workspaceId?: string; force?: bo
 async function storeLiveFiling(cik: string, filing: RecentFiling): Promise<string> {
   const url = archiveUrl(cik, filing.accession, filing.primaryDocument);
   const { bytes, contentType } = await secFetch(url);
-  const hash = sha256(bytes);
+  const hash = filingHash(bytes);
   const existing = await db.query.sourceDocument.findFirst({ where: and(eq(sourceDocument.accession, filing.accession), eq(sourceDocument.sha256, hash)) });
   if (existing) return existing.id;
   const { storageRef } = await putBlob(bytes);

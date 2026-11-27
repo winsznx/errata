@@ -8,6 +8,7 @@ import { extractItemSections, extractParagraphs } from "../parsing/filing-text.j
 import { parseTables } from "../parsing/html-tables.js";
 import { parseInlineXbrl, scenarioRole } from "../parsing/ixbrl.js";
 import { putBlob, sha256 } from "./blob-store.js";
+import { filingHash } from "./canonical.js";
 import { datasetsDir, loadProvenance, type ProvenanceSource } from "./provenance.js";
 import { secFetch } from "./sec-client.js";
 
@@ -32,8 +33,9 @@ async function readSnapshot(entry: ProvenanceSource): Promise<Uint8Array> {
 /** Loads a manifest source from the verified snapshot or from sec.gov. Either way the bytes must hash to the manifest value. */
 export async function loadSourceBytes(entry: ProvenanceSource, mode: "snapshot" | "live"): Promise<{ bytes: Uint8Array; contentType: string }> {
   const loaded = mode === "snapshot" ? { bytes: await readSnapshot(entry), contentType: "text/html" } : await secFetch(entry.url);
-  const hash = sha256(loaded.bytes);
-  if (hash !== entry.sha256) throw new Error(`hash mismatch for ${entry.accession}: expected ${entry.sha256}, got ${hash}`);
+  if (mode === "snapshot" && sha256(loaded.bytes) !== entry.snapshotSha256) throw new Error(`snapshot bytes changed for ${entry.accession}`);
+  const hash = filingHash(loaded.bytes);
+  if (hash !== entry.sha256) throw new Error(`filing hash mismatch for ${entry.accession}: expected ${entry.sha256}, got ${hash}`);
   return loaded;
 }
 

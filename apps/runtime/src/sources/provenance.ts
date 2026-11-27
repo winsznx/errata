@@ -15,6 +15,7 @@ const SOURCE_ENTRY = z.object({
   url: z.string().url(),
   path: z.string(),
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  snapshotSha256: z.string().regex(/^[0-9a-f]{64}$/),
   bytes: z.number().int().positive(),
 });
 

@@ -1,0 +1,15 @@
+{
+  "scenarioId": "xencor-q1-repair",
+  "note": "Manual ground truth from 10-Q 0001326732-24-000029 and 10-Q/A 0001326732-25-000017 (restatement table, in thousands). Values in base US dollars.",
+  "affectedClaims": [
+    { "report": "Xencor Q1 2024", "label": "Total current assets, March 31, 2024", "kind": "fact", "expected": "574847000" },
+    { "report": "Xencor Q1 2024", "label": "Total current liabilities, March 31, 2024", "kind": "fact", "expected": "71075000" },
+    { "report": "Xencor Q1 2024", "label": "Working capital, March 31, 2024", "kind": "formula", "expected": "503772000" },
+    { "report": "Xencor Q1 2024", "label": "Current ratio, March 31, 2024", "kind": "formula", "expected": "8.087893070699964825888146324305311290890" },
+    { "report": "Xencor Q1 2024", "label": "Liquidity conclusion", "kind": "qualitative", "expected": null },
+    { "report": "Xencor Q1 2024", "label": "Headline conclusion", "kind": "qualitative", "expected": null }
+  ],
+  "candidateClaims": [],
+  "unaffectedReports": [],
+  "expectedScopePeriodEnds": ["2023-12-31", "2024-03-31", "2024-06-30", "2024-09-30"]
+}
