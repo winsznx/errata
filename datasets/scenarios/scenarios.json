@@ -37,6 +37,7 @@
     },
     {
       "id": "nocera-q1-stale-evidence",
+      "groundTruth": "nocera-q1-repair",
       "label": "J3 New evidence while agents are working",
       "description": "Same public filings as J1. The amendment is released while agents are still working on the non-reliance notice. A labelled scheduling control holds one epoch 1 write from the Impact Analyst until after the amendment, so the stale write is attempted deterministically and must be rejected.",
       "mode": "replay",

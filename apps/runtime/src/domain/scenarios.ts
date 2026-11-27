@@ -22,6 +22,8 @@ const SCENARIO = z.object({
   reports: z.array(z.string()),
   watchlist: z.array(z.string()),
   faults: z.array(FAULT),
+  /** Scenarios that replay the same notes and filings share one ground truth file in datasets/evaluation. */
+  groundTruth: z.string().optional(),
 });
 
 const BINDING = z.object({ sourceRef: z.string(), concept: z.string(), periodEnd: z.string() });

@@ -135,6 +135,11 @@ interface Expected {
   expectedScopePeriodEnds: string[];
 }
 
+async function loadExpected(scenarioId: string): Promise<Expected> {
+  const scenario = await loadScenario(scenarioId);
+  return JSON.parse(await readFile(resolve(datasetsDir(), "evaluation", `${scenario.groundTruth ?? scenario.id}.expected.json`), "utf8")) as Expected;
+}
+
 async function score(workspaceId: string, expected: Expected) {
   const impacts = await db
     .select({ impact: claimImpact, claim, title: researchReport.title })
@@ -243,7 +248,7 @@ async function main(): Promise<void> {
     for (let i = 0; i < runs; i += 1) {
       console.log(`run ${i + 1} of ${runs}`);
       const outcome = await replay(scenarioId, { approve: true, timeoutSeconds: Number(arg("timeout") ?? 900), log: true });
-      const expected = JSON.parse(await readFile(resolve(datasetsDir(), "evaluation", `${scenarioId}.expected.json`), "utf8")) as Expected;
+      const expected = await loadExpected(scenarioId);
       const scored = await score(outcome.workspaceId, expected);
       const record = { scenarioId, run: i + 1, model: `${ENV.MODEL_PROVIDER}/${ENV.MODEL_ID}`, sdk: SDK_VERSION, buildCommit: buildCommit(), startedAt: outcome.startedAt.toISOString(), endedAt: outcome.endedAt.toISOString(), workspace: outcome.slug, reissued: outcome.reissued, caseStatuses: outcome.caseStatuses, ...scored };
       results.push(record);
@@ -304,7 +309,7 @@ async function main(): Promise<void> {
     const slug = arg("workspace");
     const ws = slug ? await db.query.workspace.findFirst({ where: eq(workspace.slug, slug) }) : null;
     if (!ws?.scenarioId) throw new Error("workspace not found or not a scenario workspace");
-    const expected = JSON.parse(await readFile(resolve(datasetsDir(), "evaluation", `${ws.scenarioId}.expected.json`), "utf8")) as Expected;
+    const expected = await loadExpected(ws.scenarioId);
     const scored = await score(ws.id, expected);
     const cases = await db.select().from(correctionCase).where(eq(correctionCase.workspaceId, ws.id));
     const record = { scenarioId: ws.scenarioId, workspace: ws.slug, model: `${ENV.MODEL_PROVIDER}/${ENV.MODEL_ID}`, sdk: SDK_VERSION, buildCommit: buildCommit(), scoredAt: new Date().toISOString(), caseStatuses: cases.map((c) => c.status), ...scored };
