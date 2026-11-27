@@ -74,7 +74,8 @@ export async function pollWatchlists(options: { workspaceId?: string; force?: bo
   for (const { sub } of due) {
     await db.update(watchSubscription).set({ lastCheckedAt: new Date() }).where(eq(watchSubscription.id, sub.id));
     try {
-      const filings = (await recentFilings(sub.cik)).filter((f) => sub.forms.includes(f.form)).slice(0, 20);
+      const watchingSince = sub.createdAt.getTime();
+      const filings = (await recentFilings(sub.cik)).filter((f) => sub.forms.includes(f.form) && new Date(f.acceptedAt ?? `${f.filedDate}T23:59:59Z`).getTime() > watchingSince).slice(0, 10);
       for (const filing of filings) {
         const known = await db
           .select({ id: workspaceSource.sourceId })

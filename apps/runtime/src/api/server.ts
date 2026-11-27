@@ -15,7 +15,7 @@ import { DomainError, assert } from "../domain/errors.js";
 import { eventBus, serializeEvent } from "../domain/events.js";
 import { latestCandidate, reissue, reviewCandidate, withdrawReport } from "../domain/publication.js";
 import { loadScenario, loadScenarios } from "../domain/scenarios.js";
-import { createScenarioWorkspace, hashToken } from "../domain/workspace.js";
+import { createLiveWorkspace, createScenarioWorkspace, hashToken } from "../domain/workspace.js";
 import { EXPORT_MIME, exportBytes, generateExport, type ExportFormat } from "../exports/service.js";
 import { retryDelivery } from "../jobs/handlers.js";
 import { padCik } from "../sources/sec-client.js";
@@ -108,10 +108,10 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   app.post("/api/v1/demo/sessions", async (request, reply) => {
     const body = z.object({ scenarioId: z.string().min(1).max(80) }).parse(request.body);
-    await loadScenario(body.scenarioId);
+    if (body.scenarioId !== "live-monitor") await loadScenario(body.scenarioId);
     const [recent] = await db.select({ n: count() }).from(workspace).where(gte(workspace.createdAt, new Date(Date.now() - 3_600_000)));
     if ((recent?.n ?? 0) >= ENV.DEMO_SESSION_LIMIT_PER_HOUR) throw new DomainError("QUOTA_EXCEEDED", "the hourly limit for new demo workspaces is reached; try again shortly or use an existing workspace");
-    const created = await createScenarioWorkspace(body.scenarioId);
+    const created = body.scenarioId === "live-monitor" ? await createLiveWorkspace() : await createScenarioWorkspace(body.scenarioId);
     const principal = await issueSession(reply, created.workspaceId, "editor");
     void runtimeFor(created.workspaceId).catch((error: unknown) => request.log.error(error, "runtime start failed"));
     return ok(reply, { workspaceId: created.workspaceId, slug: created.slug, principal, route: `/w/${created.slug}` }, 201);

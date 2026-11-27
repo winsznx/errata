@@ -106,6 +106,15 @@ export default function DemoPage() {
                     </button>
                   </article>
                 ))}
+                <article className="scenario">
+                  <div className="stack-sm">
+                    <h3>Live EDGAR monitor</h3>
+                    <p className="small">Watches Nocera, The Joint Corp. and Xencor on SEC EDGAR from the moment you start it, and treats only filings accepted after that as new. Add any issuer by CIK and any note through intake. Requests to sec.gov are rate limited and declare a contact as SEC asks.</p>
+                  </div>
+                  <button type="button" className="btn" disabled={starting !== null} aria-busy={starting === "live-monitor"} onClick={() => void start("live-monitor")}>
+                    {starting === "live-monitor" ? "Preparing" : "Start"}
+                  </button>
+                </article>
               </div>
             </section>
           </>

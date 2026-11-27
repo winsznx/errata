@@ -286,6 +286,31 @@ export async function createScenarioWorkspace(scenarioId: string, options: { ref
   return result;
 }
 
+/** A workspace that watches EDGAR for new filings from now on. It starts without research; notes are added through intake. */
+export async function createLiveWorkspace(): Promise<CreatedWorkspace> {
+  await ensureIssuers();
+  const manifest = await loadProvenance();
+  const fixtures = await loadFixtures();
+  const { result } = await commit(async (tx, record) => {
+    const slug = `live-${randomId(5)}`;
+    const [ws] = await tx
+      .insert(workspace)
+      .values({ slug, name: "Live EDGAR monitor", mode: "live", logicalTime: null, expiresAt: new Date(Date.now() + ENV.DEMO_TTL_HOURS * 3_600_000), settings: {} })
+      .returning();
+    for (const issuerRow of manifest.issuers) {
+      await tx.insert(watchSubscription).values({ workspaceId: ws!.id, cik: issuerRow.cik, forms: ["8-K", "10-K", "10-K/A", "10-Q", "10-Q/A"], intervalSeconds: ENV.SEC_POLL_INTERVAL_SECONDS });
+    }
+    for (const recipient of fixtures.recipients) {
+      const recipientId = crypto.randomUUID();
+      const token = recipientToken(recipientId);
+      await tx.insert(syntheticRecipient).values({ id: recipientId, workspaceId: ws!.id, displayName: recipient.displayName, organisation: recipient.organisation, address: recipient.address, tokenHash: hashToken(token), tokenHint: token.slice(0, 6) });
+    }
+    await record({ workspaceId: ws!.id, type: "workspace.created", actor: { kind: "system", id: "seed" }, payload: { mode: "live", watchlist: manifest.issuers.map((i) => i.cik), reports: 0, synthetic: true } });
+    return { workspaceId: ws!.id, slug };
+  });
+  return result;
+}
+
 export async function getWorkspaceBySlug(slug: string) {
   return db.query.workspace.findFirst({ where: eq(workspace.slug, slug) });
 }
