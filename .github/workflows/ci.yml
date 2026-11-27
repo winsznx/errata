@@ -1,0 +1,101 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      live:
+        description: Run one live scenario against the configured model provider
+        type: boolean
+        default: false
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: errata
+          POSTGRES_PASSWORD: errata
+          POSTGRES_DB: errata
+        ports: ["54329:5432"]
+        options: >-
+          --health-cmd "pg_isready -U errata -d errata"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      DATABASE_URL: postgres://errata:errata@localhost:54329/errata
+      SEC_USER_AGENT: Errata CI no-network-calls@example.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm -r typecheck
+      - name: Unit tests
+        run: pnpm --filter @errata/runtime test
+      - name: Migrations
+        run: pnpm --filter @errata/runtime migrate
+      - name: Filing snapshots match the provenance manifest
+        run: pnpm errata verify-sources
+      - name: Integration test (full correction loop through the domain guards)
+        run: pnpm test:integration
+      - name: Build
+        run: |
+          pnpm --filter @errata/runtime build
+          pnpm --filter @errata/web build
+      - name: Browser tests
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: test-results/
+
+  live:
+    if: github.event_name == 'workflow_dispatch' && inputs.live
+    needs: checks
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: errata
+          POSTGRES_PASSWORD: errata
+          POSTGRES_DB: errata
+        ports: ["54329:5432"]
+        options: >-
+          --health-cmd "pg_isready -U errata -d errata"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      DATABASE_URL: postgres://errata:errata@localhost:54329/errata
+      MODEL_PROVIDER: ${{ vars.MODEL_PROVIDER || 'groq' }}
+      MODEL_ID: ${{ vars.MODEL_ID || 'openai/gpt-oss-120b' }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      MOZAIK_API_KEY: ${{ secrets.MOZAIK_API_KEY }}
+      MODEL_CONCURRENCY_GLOBAL: 2
+      SEC_USER_AGENT: Errata CI no-network-calls@example.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @errata/runtime migrate
+      - name: Live Nocera correction with real agents
+        run: pnpm errata evaluate --scenario nocera-q1-repair --runs 1 --timeout 3000
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-results
+          path: evaluation/results/
