@@ -71,3 +71,19 @@ export function sameDecimal(a: string | null | undefined, b: string | null | und
     return false;
   }
 }
+
+/**
+ * A verifier recomputes a formula in code and reports what it got. Requiring a model to transcribe a 40-digit
+ * quotient exactly tests copying, not checking, so its value must agree with the code's exact result to a number of
+ * significant digits far beyond any displayed precision. The exact code result stays the stored authority.
+ */
+export const FORMULA_AGREEMENT_DIGITS = 12;
+
+export function agreesToSignificantDigits(a: string | null | undefined, b: string | null | undefined, digits: number): boolean {
+  if (a === null || a === undefined || b === null || b === undefined) return false;
+  try {
+    return new Decimal(a).toSignificantDigits(digits).equals(new Decimal(b).toSignificantDigits(digits));
+  } catch {
+    return false;
+  }
+}

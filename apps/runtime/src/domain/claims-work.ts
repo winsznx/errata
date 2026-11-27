@@ -21,7 +21,7 @@ import { guardEpoch, lockCase, recomputeCaseStatus, type ActorContext } from "./
 import { eligibleSource, eligibleSources } from "./eligibility.js";
 import { DomainError, assert } from "./errors.js";
 import { commit } from "./events.js";
-import { resolveLocator, sameDecimal } from "./locator.js";
+import { FORMULA_AGREEMENT_DIGITS, agreesToSignificantDigits, resolveLocator, sameDecimal } from "./locator.js";
 
 export type ProposalKind = "fact" | "formula" | "unchanged" | "unaffected";
 
@@ -237,7 +237,7 @@ export async function submitVerification(ctx: ActorContext, input: VerificationI
         const inputs = await verifiedInputs(tx, caseRow.id, caseRow.evidenceEpoch, proposal.formula, c.id);
         const result = computeFormula(proposal.formula, inputs);
         checks.push({ name: "recomputed_in_code", ok: result.ok && sameDecimal(result.value, proposal.value), detail: result.ok ? `recomputed ${result.value}` : result.message });
-        checks.push({ name: "verifier_value_matches_recomputation", ok: result.ok && sameDecimal(input.independentValue, result.value), detail: `verifier computed ${input.independentValue ?? "nothing"}` });
+        checks.push({ name: "verifier_value_matches_recomputation", ok: result.ok && agreesToSignificantDigits(input.independentValue, result.value, FORMULA_AGREEMENT_DIGITS), detail: `verifier computed ${input.independentValue ?? "nothing"}; code recomputed ${result.ok ? result.value : "nothing"}; must agree to ${FORMULA_AGREEMENT_DIGITS} significant digits` });
       } catch (error) {
         checks.push({ name: "inputs_verified", ok: false, detail: error instanceof Error ? error.message : String(error) });
       }
