@@ -154,32 +154,22 @@ const idSchema = (name: string, description: string) => ({ type: "object", prope
 
 /** Each task sees only the tools it needs. Tool schemas are sent with every model call, so this keeps calls small. */
 const TASK_TOOLS: Record<string, string[]> = {
-  classify_filing: ["list_source_sections", "read_source_excerpt", "propose_disclosure_scope", "record_task_outcome"],
-  respond_scope_challenge: ["list_source_sections", "read_source_excerpt", "propose_disclosure_scope", "record_task_outcome"],
-  link_amendment: ["list_source_sections", "read_source_excerpt", "propose_amendment_link", "record_task_outcome"],
-  check_scope: ["list_source_sections", "read_source_excerpt", "check_disclosure_scope", "record_task_outcome"],
-  verify_replacement: ["get_proposal", "list_source_sections", "read_source_excerpt", "compute_formula", "submit_verification", "record_task_outcome"],
-  review_conclusions: ["get_draft_for_review", "review_draft_conclusions", "record_task_outcome"],
-  verify_bindings: ["get_draft", "list_source_sections", "read_source_excerpt", "confirm_binding", "record_task_outcome"],
-  propose_replacements: ["get_case", "find_fact_candidates", "propose_replacement", "raise_challenge", "record_task_outcome"],
-  extract_claims: ["get_draft", "search_facts", "propose_claim", "record_task_outcome"],
-  write_warning: ["get_case", "propose_warning_text", "record_task_outcome"],
-  draft_revision: ["get_report_for_editing", "propose_revision_patch", "record_task_outcome"],
-  revise_draft: ["get_report_for_editing", "get_draft_for_review", "propose_revision_patch", "record_task_outcome"],
+  classify_filing: ["list_source_sections", "read_source_excerpt", "propose_disclosure_scope"],
+  respond_scope_challenge: ["list_source_sections", "read_source_excerpt", "propose_disclosure_scope"],
+  link_amendment: ["list_source_sections", "read_source_excerpt", "propose_amendment_link"],
+  check_scope: ["list_source_sections", "read_source_excerpt", "check_disclosure_scope"],
+  verify_replacement: ["get_proposal", "read_source_excerpt", "list_source_sections", "compute_formula", "submit_verification"],
+  review_conclusions: ["get_draft_for_review", "review_draft_conclusions"],
+  verify_bindings: ["get_draft", "list_source_sections", "read_source_excerpt", "confirm_binding"],
+  propose_replacements: ["get_case", "find_fact_candidates", "propose_replacement", "raise_challenge"],
+  extract_claims: ["get_draft", "search_facts", "propose_claim"],
+  write_warning: ["get_case", "propose_warning_text"],
+  draft_revision: ["get_report_for_editing", "propose_revision_patch"],
+  revise_draft: ["get_report_for_editing", "get_draft_for_review", "propose_revision_patch"],
 };
 
 export function buildTools(ctx: ToolContext): Tool[] {
   const tools: Record<string, Tool> = {
-    record_task_outcome: defineTool(ctx, {
-      name: "record_task_outcome",
-      description: "Record how this task ended. Call exactly once, last.",
-      schema: z.object({ outcome: z.enum(["done", "waiting", "blocked", "stale", "failed"]), summary: z.string().min(3).max(600) }),
-      jsonSchema: { type: "object", properties: { outcome: { type: "string", enum: ["done", "waiting", "blocked", "stale", "failed"] }, summary: { type: "string" } }, required: ["outcome", "summary"], additionalProperties: false },
-      run: async ({ outcome, summary }) => {
-        await db.update(agentRun).set({ outcome, summary }).where(eq(agentRun.id, ctx.agentRunId));
-        return { recorded: true };
-      },
-    }),
     get_case: defineTool(ctx, {
       name: "get_case",
       description: "Read a correction case: scope, evidence epoch, affected claims with states, current proposals and open challenges.",
@@ -256,10 +246,10 @@ export function buildTools(ctx: ToolContext): Tool[] {
     }),
     find_fact_candidates: defineTool(ctx, {
       name: "find_fact_candidates",
-      description: "Find facts in eligible filings with the same issuer, concept, period and unit as a claim, across as-reported, adjustment and as-restated columns.",
-      schema: z.object({ caseId: ID, claimId: ID }),
-      jsonSchema: { type: "object", properties: { caseId: { type: "string" }, claimId: { type: "string" } }, required: ["caseId", "claimId"], additionalProperties: false },
-      run: (args) => findFactCandidates(actor(ctx), args),
+      description: "For each claim, find facts in eligible filings with the same issuer, concept, period and unit, across as-reported, adjustment and as-restated columns.",
+      schema: z.object({ caseId: ID, claimIds: z.array(ID).min(1).max(10) }),
+      jsonSchema: { type: "object", properties: { caseId: { type: "string" }, claimIds: { type: "array", items: { type: "string" }, description: "One or more claim ids" } }, required: ["caseId", "claimIds"], additionalProperties: false },
+      run: async ({ caseId, claimIds }) => Object.fromEntries(await Promise.all(claimIds.map(async (claimId) => [claimId, (await findFactCandidates(actor(ctx), { caseId, claimId })).map((f) => ({ factId: f.factId, accession: f.form + " " + f.accession, column: f.column, periodEnd: f.periodEnd, printed: f.rawText, value: f.value, locatorId: f.locatorId }))]))),
     }),
     propose_replacement: defineTool(ctx, {
       name: "propose_replacement",
@@ -479,10 +469,10 @@ export function buildTools(ctx: ToolContext): Tool[] {
   });
 
   const byRole: Record<AgentRole, string[]> = {
-    "filing-monitor": ["list_eligible_filings", "list_source_sections", "read_source_excerpt", "list_open_cases", "get_case", "propose_disclosure_scope", "propose_amendment_link", "record_task_outcome"],
-    "impact-analyst": ["get_case", "find_fact_candidates", "read_source_excerpt", "propose_replacement", "raise_challenge", "get_draft", "search_facts", "propose_claim", "record_task_outcome"],
-    "financial-verifier": ["get_case", "get_proposal", "list_source_sections", "read_source_excerpt", "check_disclosure_scope", "compute_formula", "submit_verification", "raise_challenge", "get_draft", "confirm_binding", "get_draft_for_review", "review_draft_conclusions", "record_task_outcome"],
-    "publication-editor": ["get_case", "get_report_for_editing", "get_draft_for_review", "propose_warning_text", "propose_revision_patch", "record_task_outcome"],
+    "filing-monitor": ["list_eligible_filings", "list_source_sections", "read_source_excerpt", "list_open_cases", "get_case", "propose_disclosure_scope", "propose_amendment_link"],
+    "impact-analyst": ["get_case", "find_fact_candidates", "read_source_excerpt", "propose_replacement", "raise_challenge", "get_draft", "search_facts", "propose_claim"],
+    "financial-verifier": ["get_case", "get_proposal", "list_source_sections", "read_source_excerpt", "check_disclosure_scope", "compute_formula", "submit_verification", "raise_challenge", "get_draft", "confirm_binding", "get_draft_for_review", "review_draft_conclusions"],
+    "publication-editor": ["get_case", "get_report_for_editing", "get_draft_for_review", "propose_warning_text", "propose_revision_patch"],
   };
   const names = (ctx.taskKind && TASK_TOOLS[ctx.taskKind]) || byRole[ctx.role];
   return names.filter((name) => byRole[ctx.role].includes(name)).map((name) => tools[name]!);

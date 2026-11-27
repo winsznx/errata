@@ -29,6 +29,7 @@ const ENV_SCHEMA = z.object({
   MODEL_PROVIDER: z.enum(["anthropic", "openai", "google", "groq"]).default("openai"),
   MODEL_ID: z.string().default("gpt-5.4"),
   MODEL_MAX_OUTPUT_TOKENS: intFromEnv(4096),
+  MODEL_REASONING_EFFORT: z.string().optional().transform((v) => (v ? v : undefined)),
   MODEL_CONCURRENCY_GLOBAL: intFromEnv(8),
   MODEL_CONCURRENCY_WORKSPACE: intFromEnv(4),
   MODEL_CALL_TIMEOUT_MS: intFromEnv(240_000),

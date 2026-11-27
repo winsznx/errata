@@ -224,8 +224,10 @@ export class WorkspaceRuntime {
     this.state.activeRuns.delete(runId);
     const row = await db.query.agentRun.findFirst({ where: eq(agentRun.id, runId) });
     if (!row || row.status !== "STARTED") return;
-    const status = this.staleRuns.has(runId) || row.outcome === "stale" ? "STALE" : "COMPLETED";
-    await db.update(agentRun).set({ status, endedAt: new Date(), summary: row.summary ?? answer.slice(0, 600) }).where(eq(agentRun.id, runId));
+    const stale = this.staleRuns.has(runId) || row.outcome === "stale" || /STALE_EVIDENCE/.test(answer);
+    const status = stale ? "STALE" : "COMPLETED";
+    const outcome = row.outcome ?? (stale ? "stale" : /^Stopped by interception/.test(answer) ? "failed" : "done");
+    await db.update(agentRun).set({ status, outcome, endedAt: new Date(), summary: row.summary ?? answer.slice(0, 600) }).where(eq(agentRun.id, runId));
     await commit(async (_tx, record) => {
       await record({ workspaceId: this.workspaceId, type: status === "STALE" ? "agent.stale" : "agent.completed", actor: { kind: "agent", id: row.role }, caseId: row.caseId, evidenceEpoch: row.epoch, payload: { agentRunId: runId, role: row.role, task: active?.task ?? row.taskKey, outcome: row.outcome, summary: (row.summary ?? answer).slice(0, 400), loopId: row.nativeLoopId } });
     });
@@ -358,7 +360,7 @@ export class WorkspaceRuntime {
         originalLog(...args);
       };
       try {
-        this.rt.runLoop(agent.getId(), message, { model: ENV.MODEL_ID, maxOutputTokens: ENV.MODEL_MAX_OUTPUT_TOKENS, tools, context }, this.interception(runId, task.caseId, task.epoch, context, tools));
+        this.rt.runLoop(agent.getId(), message, { model: ENV.MODEL_ID, maxOutputTokens: ENV.MODEL_MAX_OUTPUT_TOKENS, ...(ENV.MODEL_REASONING_EFFORT ? { reasoningEffort: ENV.MODEL_REASONING_EFFORT } : {}), tools, context }, this.interception(runId, task.caseId, task.epoch, context, tools));
       } finally {
         console.log = originalLog;
       }
@@ -420,7 +422,7 @@ async function planTasks(workspaceId: string, role: AgentRole, type: string, pay
       });
     }
     if (type === "challenge.raised" && payload.targetKind === "disclosure_scope" && caseId) {
-      tasks.push({ kind: "respond_scope_challenge", key: `scope-challenge:${String(payload.challengeId)}`, caseId: null, epoch: null, trigger: type, message: `Your proposed scope for case ${caseId} was challenged: ${String(payload.explanation)}. Proposed periods ${JSON.stringify(payload.proposedPeriods)}, checked periods ${JSON.stringify(payload.checkedPeriods)}. Re-read the excerpts. If the text supports a different scope, propose it again with propose_disclosure_scope; otherwise record that you stand by it.` });
+      tasks.push({ kind: "respond_scope_challenge", key: `scope-challenge:${String(payload.challengeId)}`, caseId: null, epoch: null, trigger: type, message: `Your proposed scope for case ${caseId} was challenged: ${String(payload.explanation)}. Proposed periods ${JSON.stringify(payload.proposedPeriods)}, checked periods ${JSON.stringify(payload.checkedPeriods)}. Re-read the excerpts. If the text supports a different scope, propose it again with propose_disclosure_scope; otherwise say that you stand by it.` });
     }
   }
 
@@ -442,7 +444,7 @@ async function planTasks(workspaceId: string, role: AgentRole, type: string, pay
       if (proposal.proposerAgent === "financial-verifier") continue;
       const checks = await db.$count(agentRun, and(eq(agentRun.workspaceId, workspaceId), eq(agentRun.taskKey, `verify:${proposal.id}`), eq(agentRun.status, "COMPLETED")));
       if (checks >= 2) continue;
-      tasks.push({ kind: "verify_replacement", key: `verify:${proposal.id}`, caseId: proposal.caseId, epoch: proposal.epoch, trigger: type, message: `Verify proposal ${proposal.id} (kind ${proposal.kind}) from ${proposal.proposerAgent}. Use get_proposal to see the claim and its identity. ${proposal.kind === "formula" ? "Recompute it with compute_formula and submit the result." : proposal.kind === "unaffected" ? "Read the claim and confirm it contains no figures and relies on none." : "Find the matching row in the amendment's restatement table yourself: call list_source_sections on the amendment source with the claim's period end and a short row label, pick the cell whose column is as_restated, read it with read_source_excerpt, convert the printed value to base units using the scale note, and submit that value with that same as_restated locator id."}` });
+      tasks.push({ kind: "verify_replacement", key: `verify:${proposal.id}`, caseId: proposal.caseId, epoch: proposal.epoch, trigger: type, message: `Verify proposal ${proposal.id} (kind ${proposal.kind}) from ${proposal.proposerAgent}. Use get_proposal to see the claim, its identity and the amendment cells that share it. ${proposal.kind === "formula" ? "Recompute it with compute_formula and submit the result." : proposal.kind === "unaffected" ? "Read the claim and confirm it contains no figures and relies on none." : "Choose the cell for the claim's period end, read it with read_source_excerpt, check its column header says as restated, convert the printed value to base units using the scale note, and submit that value with that locator id."}` });
     }
   }
 
@@ -482,7 +484,7 @@ async function planTasks(workspaceId: string, role: AgentRole, type: string, pay
         caseId: caseRow.id,
         epoch: caseRow.evidenceEpoch,
         trigger: type,
-        message: `Case ${caseRow.id} needs replacement proposals on evidence revision ${caseRow.evidenceEpoch}. Claims to handle: ${JSON.stringify(work.map((w) => ({ claimId: w.claim.id, label: w.claim.label, category: w.claim.category, classification: w.impact.classification, state: w.impact.state, text: w.claim.text })))}. Rejected proposals and open challenges are listed in get_case; address them. For DIRECT claims use find_fact_candidates and propose the as-restated fact from the linked amendment (or "unchanged" if the amended value is the same). For DERIVED claims propose kind "formula". For candidate claims propose "unaffected" only if the text has no figures and relies on none.`,
+        message: `Case ${caseRow.id} needs replacement proposals on evidence revision ${caseRow.evidenceEpoch}. Claims to handle: ${JSON.stringify(work.map((w) => ({ claimId: w.claim.id, label: w.claim.label, category: w.claim.category, classification: w.impact.classification, state: w.impact.state, text: w.claim.text })))}. Rejected proposals and open challenges are listed in get_case; address them. For DIRECT claims call find_fact_candidates once with all their claim ids, then propose the as-restated fact from the linked amendment (or "unchanged" if the amended value is the same). For DERIVED claims propose kind "formula". For candidate claims propose "unaffected" only if the text has no figures and relies on none.`,
       });
     }
   }

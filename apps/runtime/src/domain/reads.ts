@@ -174,7 +174,16 @@ export async function proposalForVerifier(workspaceId: string, proposalId: strin
     rationale: row.proposal.rationale,
     claim: { claimId: row.claim.id, label: row.claim.label, category: row.claim.category, text: row.claim.text, material: row.claim.material, identity: { conceptId, periodType, periodEnd, unit }, formula: row.claim.formula },
     amendmentSources: amendments,
-    note: "The proposed value is withheld. Read the evidence yourself and submit the value you find.",
+    amendmentCells: row.claim.semanticKey && amendments.length
+      ? (
+          await db
+            .select({ column: financialFact.sourceColumn, periodEnd: financialFact.periodEnd, locatorId: financialFact.locatorId, kind: sourceLocator.kind, label: financialFact.label })
+            .from(financialFact)
+            .innerJoin(sourceLocator, eq(sourceLocator.id, financialFact.locatorId))
+            .where(and(inArray(financialFact.sourceId, amendments.map((a) => a.sourceId)), eq(financialFact.semanticKey, row.claim.semanticKey)))
+        ).map((c) => [c.column, c.periodEnd, c.kind, c.label, c.locatorId])
+      : [],
+    note: "The proposed value is withheld. amendmentCells are [column, periodEnd, kind, rowLabel, locatorId] for cells with the claim's identity, without values. Read the cell you choose with read_source_excerpt and submit the value you read.",
   };
 }
 
