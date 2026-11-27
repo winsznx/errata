@@ -11,6 +11,7 @@
 Errata keeps a record of which filing figures each published research note relies on. When an issuer tells the SEC that earlier financial statements should no longer be relied upon, Errata puts a warning on every affected note within about a minute. When the amended filing arrives, a Filing Monitor, Impact Analyst, Financial Verifier and Publication Editor, running as concurrent Mozaik agents, propose the restated figures, check each other's work against the filing itself, and draft a corrected version with a correction notice. Code enforces the evidence rules, and a person approves the exact draft that gets published.
 
 - **Hosted demo:** https://errata-smoky.vercel.app (open `/demo`, then **Open the recorded run** to see a finished correction without waiting for the agents)
+- **Demo video (2 min):** [errata-demo.mp4](https://github.com/winsznx/errata/releases/download/v0.1.0/errata-demo.mp4), a walkthrough of the recorded Nocera run
 - **Agent runtime API:** https://errata-api.158.220.85.120.sslip.io/api/v1/ready
 
 ![The resolved Nocera case: each agent's last loop, the scope the verifier confirmed, and the timeline](docs/screenshots/case.png)
