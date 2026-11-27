@@ -210,7 +210,7 @@ function ImpactDetail({ row, detail }: { row: ImpactRow; detail: CaseDetail }) {
 
 export default function CaseDeskPage() {
   const { caseId } = useParams<{ caseId: string }>();
-  const { slug, workspaceId, canAct, principal } = useWorkspace();
+  const { slug, workspaceId, canAct, principal, overview } = useWorkspace();
   const toast = useToast();
   const { data, error, isLoading, mutate } = useWs<CaseDetail>(`/cases/${caseId}`, { refreshInterval: 10_000 });
   const [tab, setTab] = useState<Tab>("Overview");
@@ -256,7 +256,7 @@ export default function CaseDeskPage() {
             </div>
           </div>
           <div className="row">
-            {failed.length ? (
+            {failed.length && !overview?.workspace.isReference && !["RESOLVED", "NOT_APPLICABLE"].includes(data.case.status) ? (
               <button
                 type="button"
                 className="btn"
