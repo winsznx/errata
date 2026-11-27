@@ -7,6 +7,7 @@ import { and, asc, count, desc, eq, gt, gte } from "drizzle-orm";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { z, ZodError } from "zod";
 import { runtimeFor } from "../agents/host.js";
+import { currentProviderLimit } from "../agents/model.js";
 import { ENV } from "../config/env.js";
 import { db, sqlClient } from "../db/client.js";
 import { agentRun, correctionNotice, delivery, domainEvent, issuer, researchReport, researchRevision, syntheticRecipient, watchSubscription, workspace } from "../db/schema.js";
@@ -92,7 +93,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   app.get("/api/v1/ready", async (_request, reply) => {
     await sqlClient`select 1`;
     const migrations = await sqlClient`select count(*)::int as n from drizzle.__drizzle_migrations`;
-    return ok(reply, { database: "ok", migrations: migrations[0]?.n ?? 0, model: { provider: ENV.MODEL_PROVIDER, id: ENV.MODEL_ID, configured: Boolean({ anthropic: process.env.ANTHROPIC_API_KEY, openai: process.env.OPENAI_API_KEY, google: process.env.GEMINI_API_KEY, groq: process.env.GROQ_API_KEY }[ENV.MODEL_PROVIDER]) }, mozaikCloud: Boolean(process.env.MOZAIK_API_KEY || process.env.MOZAIK_PROJECT_KEY) || existsSync(process.env.MOZAIK_CREDENTIALS_FILE ?? join(homedir(), ".mozaik", "credentials.json")), liveMonitor: ENV.ENABLE_LIVE_MONITOR, build: ENV.BUILD_COMMIT });
+    return ok(reply, { database: "ok", migrations: migrations[0]?.n ?? 0, model: { provider: ENV.MODEL_PROVIDER, id: ENV.MODEL_ID, limit: currentProviderLimit(), configured: Boolean({ anthropic: process.env.ANTHROPIC_API_KEY, openai: process.env.OPENAI_API_KEY, google: process.env.GEMINI_API_KEY, groq: process.env.GROQ_API_KEY }[ENV.MODEL_PROVIDER]) }, mozaikCloud: Boolean(process.env.MOZAIK_API_KEY || process.env.MOZAIK_PROJECT_KEY) || existsSync(process.env.MOZAIK_CREDENTIALS_FILE ?? join(homedir(), ".mozaik", "credentials.json")), liveMonitor: ENV.ENABLE_LIVE_MONITOR, build: ENV.BUILD_COMMIT });
   });
 
   app.get("/api/v1/scenarios", async (_request, reply) => {

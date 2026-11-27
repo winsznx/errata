@@ -7,6 +7,7 @@ import { useState } from "react";
 import { apiSend, ws } from "@/lib/api";
 import { fmtDateTime, relative } from "@/lib/format";
 import type { Role } from "@/lib/types";
+import { ProviderNotice } from "./provider-notice";
 import { useToast } from "./ui";
 import { useWorkspace } from "./workspace-context";
 
@@ -131,6 +132,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <main id="main" className="content">
+          <ProviderNotice />
           {children}
         </main>
       </div>

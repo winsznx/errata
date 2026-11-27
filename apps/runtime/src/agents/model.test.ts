@@ -1,7 +1,7 @@
 import { ModelContext, type InferenceInput, type InferenceOutput, type InferenceRunner } from "@mozaik-ai/core";
 import { APIConnectionTimeoutError } from "openai";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type CallContext, GuardedInferenceRunner, classifyProviderError, retryDelayMs } from "./model.js";
+import { type CallContext, GuardedInferenceRunner, classifyProviderError, currentProviderLimit, retryDelayMs } from "./model.js";
 
 describe("classifyProviderError", () => {
   it("treats a billing refusal as a quota stop, not a retryable error", () => {
@@ -33,12 +33,12 @@ describe("classifyProviderError", () => {
 describe("GuardedInferenceRunner", () => {
   const output: InferenceOutput = { items: [], tokenUsage: undefined, rowResponse: { usage: { prompt_tokens: 10, completion_tokens: 2 } } };
 
-  function setup(failures: number) {
+  function setup(failures: number, failure: () => Error = () => new APIConnectionTimeoutError()) {
     let calls = 0;
     const inner: InferenceRunner = {
       run: async () => {
         calls += 1;
-        if (calls <= failures) throw new APIConnectionTimeoutError();
+        if (calls <= failures) throw failure();
         return output;
       },
       stream: () => {
@@ -81,5 +81,20 @@ describe("GuardedInferenceRunner", () => {
     await settled;
     expect(calls()).toBe(3);
     expect(call.onFailure).toHaveBeenCalledOnce();
+  });
+
+  it("reports a daily budget refusal while it applies and clears it after the next answer", async () => {
+    // #given
+    vi.useFakeTimers();
+    const daily = () => Object.assign(new Error("429 Rate limit reached for model on tokens per day (TPD): Limit 200000, Used 199390, Requested 3080. Please try again in 1m30s."), { status: 429 });
+    const { runner, input } = setup(1, daily);
+    // #when
+    const pending = runner.run(input);
+    await vi.advanceTimersByTimeAsync(1_000);
+    const during = currentProviderLimit();
+    await vi.advanceTimersByTimeAsync(120_000);
+    await pending;
+    // #then
+    expect({ during: during?.window, after: currentProviderLimit() }).toEqual({ during: "day", after: null });
   });
 });

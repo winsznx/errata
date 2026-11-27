@@ -11,6 +11,16 @@ test.describe("landing and demo", () => {
     await expect(page.getByRole("link", { name: /Run the Nocera correction/ })).toHaveAttribute("href", "/demo");
   });
 
+  test("the demo page says when the hosted model's daily budget is used up", async ({ page }) => {
+    // #given
+    const until = new Date(Date.now() + 30 * 60_000).toISOString();
+    await page.route("**/api/v1/ready", (route) => route.fulfill({ json: { data: { model: { provider: "groq", id: "openai/gpt-oss-120b", configured: true, limit: { window: "day", until } } } } }));
+    // #when
+    await page.goto("/demo");
+    // #then
+    await expect(page.getByRole("status").filter({ hasText: "daily token budget is used up" })).toBeVisible();
+  });
+
   test("a demo workspace opens with three synthetic notes and live updates", async ({ page }) => {
     // #given
     await page.goto("/demo");

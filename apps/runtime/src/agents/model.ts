@@ -55,6 +55,19 @@ export function classifyProviderError(error: unknown): ModelCallError {
   return new ModelCallError(message, "PROVIDER_ERROR");
 }
 
+export interface ProviderLimit {
+  window: "minute" | "day";
+  until: string;
+}
+
+let providerLimit: { window: ProviderLimit["window"]; until: number } | null = null;
+
+/** The provider's most recent refusal for rate or daily budget reasons, while it still applies. */
+export function currentProviderLimit(now = Date.now()): ProviderLimit | null {
+  if (!providerLimit || providerLimit.until <= now) return null;
+  return { window: providerLimit.window, until: new Date(providerLimit.until).toISOString() };
+}
+
 type ModelEntry = (typeof supportedModels)[number];
 
 /**
@@ -173,10 +186,16 @@ export class GuardedInferenceRunner implements InferenceRunner {
     let connectionFailures = 0;
     for (let attempt = 1; ; attempt += 1) {
       try {
-        return await this.inner.run(input);
+        const output = await this.inner.run(input);
+        providerLimit = null;
+        return output;
       } catch (error) {
         const classified = classifyProviderError(error);
         const connectionLost = error instanceof APIConnectionError;
+        if (classified.code === "RATE_LIMITED") {
+          const hinted = retryDelayMs(classified.message);
+          providerLimit = { window: /per day|\(TPD\)|\(RPD\)/i.test(classified.message) ? "day" : "minute", until: Date.now() + (hinted ?? 60_000) };
+        }
         if (connectionLost) connectionFailures += 1;
         const retryable = (classified.code === "RATE_LIMITED" && attempt < 12) || (connectionLost && connectionFailures <= 2);
         if (!retryable) throw error;

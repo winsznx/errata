@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import useSWR from "swr";
 import { Wordmark } from "@/components/app-shell";
+import { ProviderNotice } from "@/components/provider-notice";
 import { ErrorBox, SkeletonRows } from "@/components/ui";
 import { apiSend, fetcher, type ApiError } from "@/lib/api";
 
@@ -58,6 +59,7 @@ export default function DemoPage() {
             Each workspace replays real SEC filings in the order they became public. The research notes, publisher and recipients are synthetic. The four agents run live on a language model every time; nothing is pre-recorded.
           </p>
         </div>
+        <ProviderNotice />
         {startError ? <div className="error-box" role="alert"><strong>Could not start the workspace</strong><span>{startError}</span></div> : null}
         {error ? <ErrorBox error={error} retry={() => void mutate()} /> : null}
         {isLoading || !data ? (
