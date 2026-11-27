@@ -21,6 +21,7 @@ const USAGE = `Usage: pnpm errata <command> [options]
 Commands:
   verify-sources [--live]                 Re-hash every snapshot in datasets/provenance.json; with --live, re-fetch each from sec.gov and compare.
   scenarios                               List replay scenarios.
+  resume --workspace <slug> [--approve]   Recreate a workspace's runtime from stored state and let pending work finish.
   replay --scenario <id> [--approve]      Run a scenario end to end with live agents. --approve acts as a synthetic CLI editor
          [--timeout <seconds>]            to approve and reissue a ready draft. Prints the workspace slug for the web UI.
   evaluate --scenario <id> [--runs <n>]   Run the scenario n times with --approve, then score each run against
@@ -51,6 +52,31 @@ async function waitQuiet(workspaceId: string, deadline: number): Promise<void> {
   throw new Error("timed out waiting for agents to finish");
 }
 
+/** Acts as a clearly labelled synthetic editor: approves and reissues drafts that are ready, until agents go quiet. */
+async function approveReady(workspaceId: string, deadline: number, say: (line: string) => void): Promise<number> {
+  const cliEditor = { workspaceId, actor: { kind: "human" as const, id: "editor:cli" }, actorName: "CLI editor (synthetic)", principalId: crypto.randomUUID() };
+  let reissued = 0;
+  let idleChecks = 0;
+  while (Date.now() < deadline) {
+    const ready = await db.select().from(researchRevision).where(and(eq(researchRevision.workspaceId, workspaceId), eq(researchRevision.kind, "candidate"), eq(researchRevision.candidateState, "READY")));
+    if (!ready.length) {
+      const running = await db.$count(agentRun, and(eq(agentRun.workspaceId, workspaceId), eq(agentRun.status, "STARTED")));
+      idleChecks = running ? 0 : idleChecks + 1;
+      if (idleChecks >= 8) break;
+      await sleep(5000);
+      continue;
+    }
+    idleChecks = 0;
+    for (const candidate of ready) {
+      const review = await reviewCandidate(cliEditor, { candidateId: candidate.id, decision: "approve", contentHash: candidate.contentHash, epochVector: candidate.epochVector });
+      const result = await reissue(cliEditor, { candidateId: candidate.id, approvalId: review.result.reviewId, candidateHash: candidate.contentHash, expectedBaseRevisionId: candidate.baseRevisionId!, evidenceEpochs: candidate.epochVector });
+      reissued += 1;
+      say(`approved and reissued ${result.result.publicId} as version ${result.result.version}`);
+    }
+  }
+  return reissued;
+}
+
 interface ReplayOutcome {
   workspaceId: string;
   slug: string;
@@ -73,25 +99,7 @@ async function replay(scenarioId: string, options: { approve: boolean; timeoutSe
     say(`released ${step.position}/${step.of}: ${scenario.events[position]!.label}`);
     await waitQuiet(created.workspaceId, deadline);
   }
-  let reissued = 0;
-  if (options.approve) {
-    const cliEditor = { workspaceId: created.workspaceId, actor: { kind: "human" as const, id: "editor:cli" }, actorName: "CLI editor (synthetic)", principalId: crypto.randomUUID() };
-    while (Date.now() < deadline) {
-      const ready = await db.select().from(researchRevision).where(and(eq(researchRevision.workspaceId, created.workspaceId), eq(researchRevision.kind, "candidate"), eq(researchRevision.candidateState, "READY")));
-      if (!ready.length) {
-        const running = await db.$count(agentRun, and(eq(agentRun.workspaceId, created.workspaceId), eq(agentRun.status, "STARTED")));
-        if (!running) break;
-        await sleep(3000);
-        continue;
-      }
-      for (const candidate of ready) {
-        const review = await reviewCandidate(cliEditor, { candidateId: candidate.id, decision: "approve", contentHash: candidate.contentHash, epochVector: candidate.epochVector });
-        const result = await reissue(cliEditor, { candidateId: candidate.id, approvalId: review.result.reviewId, candidateHash: candidate.contentHash, expectedBaseRevisionId: candidate.baseRevisionId!, evidenceEpochs: candidate.epochVector });
-        reissued += 1;
-        say(`approved and reissued ${result.result.publicId} as version ${result.result.version}`);
-      }
-    }
-  }
+  const reissued = options.approve ? await approveReady(created.workspaceId, deadline, say) : 0;
   await sleep(2500);
   const cases = await db.select().from(correctionCase).where(eq(correctionCase.workspaceId, created.workspaceId));
   return { workspaceId: created.workspaceId, slug: created.slug, startedAt, endedAt: new Date(), reissued, caseStatuses: cases.map((c) => c.status) };
@@ -222,6 +230,19 @@ async function main(): Promise<void> {
     const file = resolve(outDir, `${scenarioId}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
     await writeFile(file, `${JSON.stringify(results, null, 2)}\n`);
     console.log(`wrote ${file}`);
+    return;
+  }
+  if (command === "resume") {
+    const slug = arg("workspace");
+    const ws = slug ? await db.query.workspace.findFirst({ where: eq(workspace.slug, slug) }) : null;
+    if (!ws) throw new Error("workspace not found");
+    console.log(`resuming ${ws.slug}: recreating its Mozaik runtime from stored state`);
+    await runtimeFor(ws.id);
+    const deadline = Date.now() + Number(arg("timeout") ?? 3600) * 1000;
+    await waitQuiet(ws.id, deadline);
+    const reissued = process.argv.includes("--approve") ? await approveReady(ws.id, deadline, (line) => console.log(line)) : 0;
+    const cases = await db.select().from(correctionCase).where(eq(correctionCase.workspaceId, ws.id));
+    console.log(JSON.stringify({ workspace: ws.slug, reissued, caseStatuses: cases.map((c) => c.status) }, null, 2));
     return;
   }
   if (command === "score") {

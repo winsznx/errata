@@ -440,7 +440,7 @@ async function planTasks(workspaceId: string, role: AgentRole, type: string, pay
       .where(and(eq(replacementProposal.workspaceId, workspaceId), eq(replacementProposal.status, "PROPOSED"), eq(replacementProposal.epoch, correctionCase.evidenceEpoch)));
     for (const { proposal } of pendingProposals) {
       if (proposal.proposerAgent === "financial-verifier") continue;
-      const checks = await db.$count(agentRun, and(eq(agentRun.workspaceId, workspaceId), eq(agentRun.taskKey, `verify:${proposal.id}`)));
+      const checks = await db.$count(agentRun, and(eq(agentRun.workspaceId, workspaceId), eq(agentRun.taskKey, `verify:${proposal.id}`), eq(agentRun.status, "COMPLETED")));
       if (checks >= 2) continue;
       tasks.push({ kind: "verify_replacement", key: `verify:${proposal.id}`, caseId: proposal.caseId, epoch: proposal.epoch, trigger: type, message: `Verify proposal ${proposal.id} (kind ${proposal.kind}) from ${proposal.proposerAgent}. Use get_proposal to see the claim and its identity. ${proposal.kind === "formula" ? "Recompute it with compute_formula and submit the result." : proposal.kind === "unaffected" ? "Read the claim and confirm it contains no figures and relies on none." : "Find the matching row in the amendment's restatement table yourself: call list_source_sections on the amendment source with the claim's period end and a short row label, pick the cell whose column is as_restated, read it with read_source_excerpt, convert the printed value to base units using the scale note, and submit that value with that same as_restated locator id."}` });
     }
@@ -473,11 +473,12 @@ async function planTasks(workspaceId: string, role: AgentRole, type: string, pay
         : [];
       const work = [...candidates, ...direct, ...derivedReady];
       if (!work.length) continue;
-      const rounds = await db.$count(agentRun, and(eq(agentRun.workspaceId, workspaceId), eq(agentRun.role, "impact-analyst"), eq(agentRun.caseId, caseRow.id), eq(agentRun.epoch, caseRow.evidenceEpoch), sql`${agentRun.taskKey} like 'replace:%'`));
+      const rounds = await db.$count(agentRun, and(eq(agentRun.workspaceId, workspaceId), eq(agentRun.role, "impact-analyst"), eq(agentRun.caseId, caseRow.id), eq(agentRun.epoch, caseRow.evidenceEpoch), eq(agentRun.status, "COMPLETED"), sql`${agentRun.taskKey} like 'replace:%'`));
+      const roundKeys = await db.$count(agentRun, and(eq(agentRun.workspaceId, workspaceId), eq(agentRun.role, "impact-analyst"), eq(agentRun.caseId, caseRow.id), eq(agentRun.epoch, caseRow.evidenceEpoch), sql`${agentRun.taskKey} like 'replace:%'`));
       if (rounds >= 3) continue;
       tasks.push({
         kind: "propose_replacements",
-        key: `replace:${caseRow.id}:${caseRow.evidenceEpoch}:round${rounds + 1}`,
+        key: `replace:${caseRow.id}:${caseRow.evidenceEpoch}:round${roundKeys + 1}`,
         caseId: caseRow.id,
         epoch: caseRow.evidenceEpoch,
         trigger: type,
