@@ -39,6 +39,19 @@ export async function loadSourceBytes(entry: ProvenanceSource, mode: "snapshot" 
   return loaded;
 }
 
+/**
+ * Brings back a filing's bytes when the blob store lost them (for example a fresh storage volume next to an existing
+ * database). Manifest filings come from the committed snapshot, live filings from sec.gov; either way the filing hash
+ * must match the recorded one before the bytes are used.
+ */
+export async function restoreSourceBytes(source: { accession: string; sha256: string; url: string }): Promise<Buffer> {
+  const entry = (await loadProvenance()).sources.find((s) => s.accession === source.accession && s.sha256 === source.sha256);
+  const loaded = entry ? await loadSourceBytes(entry, "snapshot") : await secFetch(source.url);
+  if (filingHash(loaded.bytes) !== source.sha256) throw new Error(`restored bytes for ${source.accession} do not match the recorded filing hash`);
+  await putBlob(loaded.bytes);
+  return Buffer.from(loaded.bytes);
+}
+
 export async function ensureIssuers(tx: DbOrTx = db): Promise<void> {
   const manifest = await loadProvenance();
   for (const row of manifest.issuers) {

@@ -14,11 +14,10 @@ import {
   sourceDocument,
   sourceLocator,
 } from "../db/schema.js";
-import { getBlob } from "../sources/blob-store.js";
 import { tableAt } from "../parsing/html-tables.js";
 import { eligibleSource, eligibleSources } from "./eligibility.js";
 import { DomainError, assert } from "./errors.js";
-import { resolveLocator } from "./locator.js";
+import { resolveLocator, sourceBytes } from "./locator.js";
 
 export async function caseSummary(workspaceId: string, caseId: string) {
   const row = await db.query.correctionCase.findFirst({ where: and(eq(correctionCase.id, caseId), eq(correctionCase.workspaceId, workspaceId)) });
@@ -134,7 +133,7 @@ export async function readExcerpt(workspaceId: string, locatorId: string) {
   const base = { locatorId, kind: locator.kind, source: { accession: source.accession, form: source.form, filedDate: source.filedDate, url: source.url }, where: resolved.detail };
   if (locator.kind === "html_table") {
     const path = locator.path as { tableIndex: number; rowIndex: number };
-    const table = tableAt(await getBlob(source.storageRef), path.tableIndex);
+    const table = tableAt(await sourceBytes(source), path.tableIndex);
     const row = table?.rows.find((r) => r.rowIndex === path.rowIndex);
     const cited = (locator.path as { columnKey?: string; headerPath?: string[] }).headerPath?.join(" / ") ?? null;
     return {

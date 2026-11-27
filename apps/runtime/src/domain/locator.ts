@@ -6,6 +6,7 @@ import { extractParagraphs } from "../parsing/filing-text.js";
 import { normalizeWhitespace } from "../parsing/numbers.js";
 import { getBlob } from "../sources/blob-store.js";
 import { filingHash } from "../sources/canonical.js";
+import { restoreSourceBytes } from "../sources/ingest.js";
 
 type SourceRow = typeof sourceDocument.$inferSelect;
 type LocatorRow = typeof sourceLocator.$inferSelect;
@@ -19,10 +20,16 @@ export interface ResolvedLocator {
 
 const documentCache = new Map<string, Buffer>();
 
-async function sourceBytes(source: SourceRow): Promise<Buffer> {
+export async function sourceBytes(source: SourceRow): Promise<Buffer> {
   const cached = documentCache.get(source.sha256);
   if (cached) return cached;
-  const bytes = await getBlob(source.storageRef);
+  let bytes: Buffer;
+  try {
+    bytes = await getBlob(source.storageRef);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    bytes = await restoreSourceBytes(source);
+  }
   if (filingHash(bytes) !== source.sha256) throw new Error("stored source bytes do not match the recorded filing hash");
   if (documentCache.size > 16) documentCache.delete(documentCache.keys().next().value!);
   documentCache.set(source.sha256, bytes);

@@ -155,7 +155,14 @@ export async function generateExport(target: { revisionId?: string; noticeId?: s
 export async function exportBytes(exportId: string): Promise<{ bytes: Buffer; filename: string; mime: string; workspaceId: string }> {
   const row = await db.query.artifactExport.findFirst({ where: eq(artifactExport.id, exportId) });
   assert(row?.status === "READY" && row.storageRef, "NOT_FOUND", "export not ready");
-  return { bytes: await getBlob(row.storageRef), filename: row.filename, mime: MIME[row.format as ExportFormat], workspaceId: row.workspaceId };
+  try {
+    return { bytes: await getBlob(row.storageRef), filename: row.filename, mime: MIME[row.format as ExportFormat], workspaceId: row.workspaceId };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    await db.update(artifactExport).set({ status: "MISSING", error: "stored file was missing; regenerated" }).where(eq(artifactExport.id, row.id));
+    const regenerated = await generateExport({ revisionId: row.revisionId ?? undefined, noticeId: row.noticeId ?? undefined }, row.format as ExportFormat);
+    return { bytes: await getBlob(regenerated.storageRef!), filename: regenerated.filename, mime: MIME[row.format as ExportFormat], workspaceId: row.workspaceId };
+  }
 }
 
 export { MIME as EXPORT_MIME };
