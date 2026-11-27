@@ -74,6 +74,7 @@ export function humanize(value: string): string {
 }
 
 export const ROLE_LABEL: Record<string, string> = {
+  "fault-injection": "Fault injection (labelled)",
   "filing-monitor": "Filing Monitor",
   "impact-analyst": "Impact Analyst",
   "financial-verifier": "Financial Verifier",
@@ -82,6 +83,7 @@ export const ROLE_LABEL: Record<string, string> = {
 
 export function actorLabel(actor: { kind: string; id: string }): string {
   if (actor.kind === "agent") return ROLE_LABEL[actor.id] ?? actor.id;
+  if (actor.id === "fault-injection") return "Fault injection (labelled)";
   if (actor.kind === "human") return actor.id.startsWith("editor") ? "Editor" : actor.id.startsWith("analyst") ? "Analyst" : "Operator";
   const system: Record<string, string> = { propagation: "Errata rules", "case-engine": "Errata rules", replay: "Replay clock", outbox: "Delivery", "fault-injection": "Fault injection", runtime: "Runtime", "live-monitor": "Live monitor", seed: "Workspace setup" };
   return system[actor.id] ?? "System";

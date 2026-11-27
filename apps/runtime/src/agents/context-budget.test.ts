@@ -1,9 +1,9 @@
-import { DeveloperMessageItem, FunctionCallItem, FunctionCallOutputItem, ModelContext, UserMessageItem } from "@mozaik-ai/core";
+import { type ContextItem, DeveloperMessageItem, FunctionCallItem, FunctionCallOutputItem, ModelContext, UserMessageItem } from "@mozaik-ai/core";
 import { describe, expect, it } from "vitest";
 import { estimateTokens, fitContext } from "./context-budget.js";
 
 function loopContext(results: string[]): ModelContext {
-  const items = [DeveloperMessageItem.create("You are the Financial Verifier."), UserMessageItem.create("Verify proposal p1.")];
+  const items: ContextItem[] = [DeveloperMessageItem.create("You are the Financial Verifier."), UserMessageItem.create("Verify proposal p1.")];
   results.forEach((result, i) => {
     items.push(FunctionCallItem.rehydrate({ callId: `c${i}`, name: `tool_${i}`, args: "{}" }));
     items.push(FunctionCallOutputItem.create(`c${i}`, result));

@@ -22,6 +22,7 @@ import { db } from "../db/client.js";
 import { agentRun, caseSource, claim, claimImpact, correctionCase, disclosureEvent, replacementProposal, researchReport, researchRevision, runtimeSession, sourceDocument, workspace } from "../db/schema.js";
 import { commit, eventBus, serializeEvent, type CommittedEvent } from "../domain/events.js";
 import type { ScenarioFault } from "../domain/scenarios.js";
+import { injectWrongPeriodProposal } from "../domain/faults.js";
 import { fitContext } from "./context-budget.js";
 import { guardedRunner, type ModelCallError } from "./model.js";
 import { AGENT_CAPABILITIES, AGENT_ROLES, ROLE_INSTRUCTIONS, type AgentRole } from "./prompts.js";
@@ -167,6 +168,9 @@ export class WorkspaceRuntime {
       if (event.caseId || event.type.startsWith("case.") || event.type.startsWith("filing.")) await this.refreshCases();
       if (event.type === "replay.advanced") this.state.logicalTime = String((event.payload as { logicalTime?: string }).logicalTime ?? this.state.logicalTime);
       this.state.lastEventSeq = event.seq.toString();
+      if (event.type === "filing.amendment_received" && event.caseId && this.state.faults.some((f) => f.type === "inject_wrong_period_proposal")) {
+        await injectWrongPeriodProposal(this.workspaceId, event.caseId);
+      }
       this.rt.sendEvent(SemanticEvent.create(event.type, this.host.getId(), serializeEvent(event)), this.host.getId());
     } catch (error) {
       console.error("[runtime] forward failed", error);

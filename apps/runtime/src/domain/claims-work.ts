@@ -272,7 +272,8 @@ export async function submitVerification(ctx: ActorContext, input: VerificationI
         valid: true,
       })
       .returning();
-    const nextImpact = verified ? (proposal.kind === "unchanged" ? "UNCHANGED_VERIFIED" : proposal.kind === "unaffected" ? "UNAFFECTED" : "VERIFIED_REPLACEMENT") : "REJECTED";
+    const alreadyVerified = await tx.$count(replacementProposal, and(eq(replacementProposal.caseId, caseRow.id), eq(replacementProposal.claimId, c.id), eq(replacementProposal.epoch, caseRow.evidenceEpoch), eq(replacementProposal.status, "VERIFIED")));
+    const nextImpact = verified ? (proposal.kind === "unchanged" ? "UNCHANGED_VERIFIED" : proposal.kind === "unaffected" ? "UNAFFECTED" : "VERIFIED_REPLACEMENT") : alreadyVerified ? impact.state : "REJECTED";
     await tx.update(replacementProposal).set({ status: verified ? "VERIFIED" : "REJECTED", statusReason: verified ? null : checks.filter((x) => !x.ok).map((x) => `${x.name}: ${x.detail}`).join("; ") || input.rationale.slice(0, 500), updatedAt: new Date() }).where(eq(replacementProposal.id, proposal.id));
     await tx.update(claimImpact).set({ state: nextImpact, updatedAt: new Date(), rowVersion: impact.rowVersion + 1 }).where(eq(claimImpact.id, impact.id));
     let challengeId: string | null = null;
