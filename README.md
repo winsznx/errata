@@ -168,6 +168,22 @@ What this run needed besides the agents:
 
 The amendment-to-draft time for this run was 77 minutes. Most of it went to the ratio's missing verdict, about 30 minutes of stalled requests and the restarts, so it is not a measure of normal speed.
 
+**Nocera with new evidence mid-run, workspace `nocera-xwn01dk`** (`evaluation/results/nocera-q1-stale-evidence-nocera-xwn01dk.json`). This scenario uses a labelled scheduling control to hold one of the Impact Analyst's writes on evidence revision 1 until the 10-K/A arrives. In the run, the Filing Monitor linked the 10-K/A at 15:08:44 UTC and the case moved to revision 2. In the same second, the held write was rejected at commit and interception stopped the analyst's loop. The analyst then redid the work on revision 2.
+
+| Measure | Result |
+| --- | --- |
+| Non-reliance scope | Matched |
+| Affected claims found | 9 of 9, no false positives |
+| Stale results rejected | 2 |
+| Replacements verified | 6 of 7 when the run stopped |
+| Roundup that only mentions Nocera | Correctly cleared as unaffected |
+| Warnings on unaffected notes | None |
+| Agent loops | 18, with 28 overlapping pairs |
+| Tokens | 151,004 in, 7,412 out |
+| 8-K released to reader warning | 57 s |
+
+This run did not reach reissue. The check of the last formula, the table's working capital, timed out while every call waited on Groq's daily token limit, and a retry hit the same limit.
+
 **Runs that did not finish.** `nocera-q1-repair-nocera-01k2xvc.json` stopped with 4 of 7 replacements verified, before the completion reminder and recheck existed. The Joint Corp. and Xencor files from the morning ended at the provider's daily token limit before any agent wrote a proposal, so they measure the quota, not the product.
 
 ## Limitations
