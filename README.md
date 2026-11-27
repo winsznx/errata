@@ -127,7 +127,33 @@ SEC filings (verified snapshots or live EDGAR)
 
 ## Results
 
-Measured results from live runs will be added here as they complete. None of the numbers will be estimates.
+Every number below comes from a live run on Groq `openai/gpt-oss-120b` through `@mozaik-ai/core` 4.2.0, scored by `pnpm errata score` against the hand-written ground truth in `datasets/evaluation`. The raw records are in `evaluation/results`.
+
+**Nocera repair, workspace `nocera-av6gcl8`** (`evaluation/results/nocera-q1-repair-nocera-av6gcl8.json`). This run is also on the hosted demo page as the read-only recorded run.
+
+| Measure | Result |
+| --- | --- |
+| Non-reliance scope | Matched: FY2024, Q1 to Q3 2025 and FY2025 |
+| Affected claims found | 9 of 9, no false positives |
+| Replacements verified | 7 of 7 correct (4 restated figures, 3 recomputed in code) |
+| Roundup that only mentions Nocera | Correctly cleared as unaffected |
+| Warnings on unaffected notes | None |
+| Figures in the reissued note tied to verified evidence | 14 of 14 |
+| Agent loops | 32, with 42 overlapping pairs (6,252 s of overlap) |
+| Challenges between agents | 2, both resolved |
+| Tokens | 288,845 in, 15,569 out |
+| 8-K released to reader warning | 76 s |
+
+What this run needed besides the agents:
+
+- The verifier twice ended a check of the current ratio without recording a verdict. An editor action asked for one more independent check, recorded under the synthetic CLI editor's name, and that check verified it.
+- Eight loops failed. Four timed out on Groq requests that never answered, or while queued behind one. Four were cut off when the runtime was restarted to load fixes. One conclusion review was retried with `resume --retry-failed`.
+- The build changed during the run. It started before and finished after the fixes for stalled requests, restart relaunch and the editor's response to blocked drafts, at commit `3925017`.
+- Approval and reissue were done by the clearly labelled synthetic CLI editor, as `--approve` does.
+
+The amendment-to-draft time for this run was 77 minutes. Most of it went to the ratio's missing verdict, about 30 minutes of stalled requests and the restarts, so it is not a measure of normal speed.
+
+**Runs that did not finish.** `nocera-q1-repair-nocera-01k2xvc.json` stopped with 4 of 7 replacements verified, before the completion reminder and recheck existed. The Joint Corp. and Xencor files from the morning ended at the provider's daily token limit before any agent wrote a proposal, so they measure the quota, not the product.
 
 ## Limitations
 
