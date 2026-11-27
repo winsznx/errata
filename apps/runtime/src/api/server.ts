@@ -22,7 +22,7 @@ import { EXPORT_MIME, exportBytes, generateExport, type ExportFormat } from "../
 import { retryDelivery } from "../jobs/handlers.js";
 import { padCik } from "../sources/sec-client.js";
 import { issuerName, pollWatchlists } from "../sources/live.js";
-import { issueSession, principalFrom, requirePrincipal, revokeSession, streamTicket, verifyStreamTicket, withIdempotency, type Role } from "./auth.js";
+import { issueSession, principalFrom, referenceReader, requirePrincipal, revokeSession, streamTicket, verifyStreamTicket, withIdempotency, type Role } from "./auth.js";
 import { registerIntakeRoutes } from "./intake-routes.js";
 import {
   candidateView,
@@ -70,10 +70,16 @@ export async function buildServer(): Promise<FastifyInstance> {
     return payload;
   });
 
+  const referenceWorkspaces = new Map<string, boolean>();
   app.addHook("preHandler", async (request) => {
     const unsafe = !["GET", "HEAD", "OPTIONS"].includes(request.method);
     if (unsafe && request.url.startsWith("/api/v1/") && request.headers["x-errata-client"] !== "web" && request.headers["x-internal-token"] !== ENV.INTERNAL_API_TOKEN) {
       throw new DomainError("FORBIDDEN", "missing client header");
+    }
+    const target = unsafe ? /^\/api\/v1\/workspaces\/([0-9a-f-]{36})\//.exec(request.url)?.[1] : undefined;
+    if (target) {
+      if (!referenceWorkspaces.has(target)) referenceWorkspaces.set(target, (await db.query.workspace.findFirst({ where: eq(workspace.id, target), columns: { isReference: true } }))?.isReference ?? false);
+      if (referenceWorkspaces.get(target)) throw new DomainError("FORBIDDEN", "this is a recorded run and cannot be changed; start a demo workspace to run the agents yourself");
     }
   });
 
@@ -120,9 +126,15 @@ export async function buildServer(): Promise<FastifyInstance> {
   });
 
   app.get<{ Params: { slug: string } }>("/api/v1/workspaces/by-slug/:slug", async (request, reply) => {
-    const principal = await principalFrom(request);
-    if (!principal || principal.workspaceSlug !== request.params.slug) throw new DomainError("NOT_FOUND", "workspace not found");
+    const session = await principalFrom(request);
+    const principal = session?.workspaceSlug === request.params.slug ? session : await referenceReader({ slug: request.params.slug });
+    if (!principal) throw new DomainError("NOT_FOUND", "workspace not found");
     return ok(reply, { workspaceId: principal.workspaceId, principal });
+  });
+
+  app.get("/api/v1/reference", async (_request, reply) => {
+    const [ref] = await db.select({ slug: workspace.slug, name: workspace.name, scenarioId: workspace.scenarioId, createdAt: workspace.createdAt }).from(workspace).where(eq(workspace.isReference, true)).orderBy(desc(workspace.createdAt)).limit(1);
+    return ok(reply, ref ? { slug: ref.slug, name: ref.name, scenarioId: ref.scenarioId, recordedAt: ref.createdAt.toISOString(), route: `/w/${ref.slug}` } : null);
   });
 
   const W = "/api/v1/workspaces/:workspaceId";
@@ -457,6 +469,12 @@ export async function buildServer(): Promise<FastifyInstance> {
       const prepared = await prepareReadyNoceraWorkspace();
       const principal = await issueSession(reply, prepared.workspaceId, "editor");
       return ok(reply, { ...prepared, principal }, 201);
+    });
+    app.post("/api/v1/test/harness/reference", async (_request, reply) => {
+      const { prepareReadyNoceraWorkspace } = await import("../testing/harness.js");
+      const prepared = await prepareReadyNoceraWorkspace();
+      const [marked] = await db.update(workspace).set({ isReference: true, expiresAt: null }).where(eq(workspace.id, prepared.workspaceId)).returning({ id: workspace.id, slug: workspace.slug });
+      return ok(reply, marked, 201);
     });
   }
 

@@ -119,7 +119,7 @@ export function WorkspaceProvider({ slug, children }: { slug: string; children: 
   const value = useMemo<WorkspaceValue | null>(() => {
     if (!session.data) return null;
     const principal = overview.data?.principal ?? session.data.principal;
-    return { slug, workspaceId: session.data.workspaceId, principal, overview: overview.data, stream, lastEventAt, canAct: stream === "live" };
+    return { slug, workspaceId: session.data.workspaceId, principal, overview: overview.data, stream, lastEventAt, canAct: stream === "live" && !overview.data?.workspace.isReference };
   }, [session.data, overview.data, slug, stream, lastEventAt]);
 
   if (session.error) {

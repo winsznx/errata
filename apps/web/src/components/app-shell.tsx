@@ -43,10 +43,11 @@ function StreamIndicator() {
 }
 
 function RoleSwitch() {
-  const { workspaceId, principal } = useWorkspace();
+  const { workspaceId, principal, overview } = useWorkspace();
   const toast = useToast();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  if (overview?.workspace.isReference) return null;
   return (
     <label className="role-switch">
       <span className="visually-hidden">Demo role</span>
@@ -118,6 +119,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <div className="context-main">
             <span className="context-name">{overview?.workspace.name ?? "Workspace"}</span>
+            {overview?.workspace.isReference ? <span className="context-clock">Recorded run, read only</span> : null}
             {overview?.workspace.mode === "replay" ? (
               <span className="context-clock" title="Replay clock: filings become visible to agents only after this time">
                 Historical replay, clock at <span className="num">{fmtDateTime(overview.workspace.logicalTime)}</span>

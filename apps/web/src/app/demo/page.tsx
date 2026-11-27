@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import useSWR from "swr";
@@ -7,6 +8,14 @@ import { Wordmark } from "@/components/app-shell";
 import { ProviderNotice } from "@/components/provider-notice";
 import { ErrorBox, SkeletonRows } from "@/components/ui";
 import { apiSend, fetcher, type ApiError } from "@/lib/api";
+import { fmtDateTime } from "@/lib/format";
+
+interface RecordedRun {
+  slug: string;
+  name: string;
+  recordedAt: string;
+  route: string;
+}
 
 interface Scenario {
   id: string;
@@ -27,6 +36,7 @@ const TITLES: Record<string, string> = {
 export default function DemoPage() {
   const router = useRouter();
   const { data, error, isLoading, mutate } = useSWR<Scenario[], ApiError>("/api/v1/scenarios", fetcher);
+  const { data: recorded } = useSWR<RecordedRun | null>("/api/v1/reference", fetcher);
   const [starting, setStarting] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
   const primary = data?.find((s) => s.id === "nocera-q1-repair");
@@ -66,6 +76,20 @@ export default function DemoPage() {
           <SkeletonRows rows={6} />
         ) : (
           <>
+            {recorded ? (
+              <section className="scenario">
+                <div className="stack-sm">
+                  <span className="small muted">Recorded run, read only</span>
+                  <h2 className="serif">See a finished correction first</h2>
+                  <p>
+                    A Nocera workspace the four agents worked through on {fmtDateTime(recorded.recordedAt)}, kept exactly as it ended: every loop with its Mozaik Cloud session, each check and challenge, the corrected note and its correction notice. Nothing in it can be changed, and opening it does not affect a workspace you have started.
+                  </p>
+                </div>
+                <Link className="btn btn-lg" href={recorded.route}>
+                  Open the recorded run
+                </Link>
+              </section>
+            ) : null}
             {primary ? (
               <section className="scenario scenario-primary">
                 <div className="stack-sm">

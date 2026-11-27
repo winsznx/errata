@@ -9,14 +9,15 @@ import { db, sqlClient } from "../db/client.js";
 import { runMigrations } from "../db/migrate.js";
 import { agentRun, claim, claimImpact, correctionCase, domainEvent, replacementProposal, researchReport, researchRevision, toolCall, workspace } from "../db/schema.js";
 import { advanceReplay } from "../domain/cases.js";
+import { requestRecheck } from "../domain/claims-work.js";
 import { scanNumericTokens } from "../domain/document.js";
 import { sameDecimal } from "../domain/locator.js";
-import { requestRecheck } from "../domain/claims-work.js";
 import { reissue, reviewCandidate } from "../domain/publication.js";
 import { loadScenario, loadScenarios } from "../domain/scenarios.js";
 import { createScenarioWorkspace } from "../domain/workspace.js";
 import { loadSourceBytes } from "../sources/ingest.js";
 import { datasetsDir, loadProvenance } from "../sources/provenance.js";
+import { exportWorkspace, importWorkspace } from "./transfer.js";
 
 const USAGE = `Usage: pnpm errata <command> [options]
 
@@ -33,6 +34,10 @@ Commands:
                                           datasets/evaluation/<id>.expected.json and write evaluation/results.
   score --workspace <slug>                Score a finished scenario workspace against its ground truth and save the result.
   inspect-run --workspace <slug>          Print the agent runs, challenges and outcome for a workspace.
+  export-workspace --workspace <slug>     Write every row of one workspace, and the filing keys it relies on, to a JSON file.
+         --out <file>
+  import-workspace --file <file>          Load an exported workspace into this database. --reference makes it a read-only
+         [--reference] [--name <name>]    recorded run that never expires. The same filing snapshots must be ingested here.
 `;
 
 function arg(name: string): string | undefined {
@@ -309,6 +314,21 @@ async function main(): Promise<void> {
     await writeFile(file, `${JSON.stringify(record, null, 2)}\n`);
     console.log(JSON.stringify(record, null, 2));
     console.log(`wrote ${file}`);
+    return;
+  }
+  if (command === "export-workspace") {
+    const slug = arg("workspace");
+    const out = arg("out");
+    if (!slug || !out) throw new Error("--workspace and --out are required");
+    const result = await exportWorkspace(slug, out);
+    console.log(`exported ${slug}: ${result.rows} rows from ${result.tables} tables to ${out}`);
+    return;
+  }
+  if (command === "import-workspace") {
+    const file = arg("file");
+    if (!file) throw new Error("--file is required");
+    const result = await importWorkspace(file, { reference: process.argv.includes("--reference"), name: arg("name") });
+    console.log(`imported ${result.slug}: ${result.rows} rows`);
     return;
   }
   if (command === "inspect-run") {

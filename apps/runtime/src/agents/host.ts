@@ -165,11 +165,13 @@ export class WorkspaceRuntime {
     this.rt.join(this.host);
     this.rt.join(createHuman({ name: "human-editor", capabilities: ["approve", "reissue", "withdraw"], handlers: [] }));
     for (const role of AGENT_ROLES) {
-      const agent = createAgent({ name: role, capabilities: AGENT_CAPABILITIES[role], instruction: ROLE_INSTRUCTIONS[role], tools: [], handlers: [this.roleHandler(role)] });
+      const agent = createAgent({ name: role, capabilities: AGENT_CAPABILITIES[role], instruction: ROLE_INSTRUCTIONS[role], tools: [], handlers: ws.isReference ? [] : [this.roleHandler(role)] });
       this.agents.set(role, agent);
       this.roleByAgentId.set(agent.getId(), role);
       this.rt.join(agent);
     }
+    // A reference workspace is a finished recorded run: its participants are shown, but nothing is written or planned.
+    if (ws.isReference) return;
 
     const [fence] = await db.execute<{ next: number }>(sql`select coalesce(max(lease_fence), 0) + 1 as next from runtime_session where workspace_id = ${this.workspaceId}`);
     await db.update(runtimeSession).set({ status: "ENDED", endedAt: new Date() }).where(and(eq(runtimeSession.workspaceId, this.workspaceId), eq(runtimeSession.status, "ACTIVE")));

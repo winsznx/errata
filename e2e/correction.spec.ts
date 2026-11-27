@@ -135,6 +135,19 @@ test.describe("editorial review and reissue", () => {
     await stranger.close();
   });
 
+  test("a recorded run opens without a session and refuses changes", async ({ page, browser }) => {
+    // #given a workspace marked as a recorded run (test harness)
+    const created = await page.request.post("/api/v1/test/harness/reference", { headers: { "x-errata-client": "web" } });
+    const { id, slug } = (await created.json()).data as { id: string; slug: string };
+    const visitor = await (await browser.newContext()).newPage();
+    // #when
+    await visitor.goto(`/w/${slug}`);
+    const write = await visitor.request.post(`/api/v1/workspaces/${id}/replay/advance`, { headers: { "x-errata-client": "web", "idempotency-key": crypto.randomUUID() } });
+    // #then
+    await expect(visitor.getByText("Recorded run, read only")).toBeVisible();
+    expect(write.status()).toBe(403);
+  });
+
   test("an unknown public report is a 404", async ({ page }) => {
     const response = await page.goto("/p/zzzzzzzzzz");
     expect(response?.status()).toBe(404);

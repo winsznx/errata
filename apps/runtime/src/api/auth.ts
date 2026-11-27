@@ -57,8 +57,19 @@ export async function principalFrom(request: FastifyRequest): Promise<Principal 
 }
 
 /** Resolves the caller and checks the path workspace matches the session; a mismatch is reported as not found to avoid confirming that other workspaces exist. */
+/**
+ * A reference workspace is a finished recorded run that anyone may read without a session, so opening it never
+ * replaces the visitor's own demo session. Writes to it are refused before any handler runs.
+ */
+export async function referenceReader(where: { id: string } | { slug: string }): Promise<Principal | null> {
+  const ws = await db.query.workspace.findFirst({ where: "id" in where ? eq(workspace.id, where.id) : eq(workspace.slug, where.slug) });
+  if (!ws?.isReference) return null;
+  return { id: `reference-reader:${ws.id}`, workspaceId: ws.id, workspaceSlug: ws.slug, role: "reader", displayName: "Visitor (read only)" };
+}
+
 export async function requirePrincipal(request: FastifyRequest, workspaceId: string, roles?: Role[]): Promise<Principal> {
-  const principal = await principalFrom(request);
+  const session = await principalFrom(request);
+  const principal = session?.workspaceId === workspaceId ? session : ((await referenceReader({ id: workspaceId })) ?? session);
   if (!principal) throw new DomainError("UNAUTHENTICATED", "start a demo workspace to continue");
   if (principal.workspaceId !== workspaceId) throw new DomainError("NOT_FOUND", "workspace not found");
   if (roles && !roles.includes(principal.role)) throw new DomainError("FORBIDDEN", `this action needs the ${roles.join(" or ")} role`);
