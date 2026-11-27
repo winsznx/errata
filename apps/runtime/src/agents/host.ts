@@ -19,7 +19,7 @@ import {
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { ENV } from "../config/env.js";
 import { db } from "../db/client.js";
-import { agentRun, caseSource, claim, claimImpact, correctionCase, disclosureEvent, replacementProposal, researchReport, researchRevision, runtimeSession, sourceDocument, workspace } from "../db/schema.js";
+import { agentRun, caseSource, toolCall, claim, claimImpact, correctionCase, disclosureEvent, replacementProposal, researchReport, researchRevision, runtimeSession, sourceDocument, workspace } from "../db/schema.js";
 import { commit, eventBus, serializeEvent, type CommittedEvent } from "../domain/events.js";
 import type { ScenarioFault } from "../domain/scenarios.js";
 import { injectWrongPeriodProposal } from "../domain/faults.js";
@@ -76,7 +76,7 @@ class OnEventTypes extends SituationSpecification {
   }
 }
 
-interface Task {
+export interface Task {
   kind: string;
   key: string;
   caseId: string | null;
@@ -84,6 +84,38 @@ interface Task {
   message: string;
   trigger: string;
 }
+
+export function verifyTask(proposal: { id: string; kind: string; proposerAgent: string; caseId: string; epoch: number }, attempt: string, trigger: string, retried: boolean): Task {
+  const how =
+    proposal.kind === "formula"
+      ? "Recompute it with compute_formula and submit the value it returns, copied in full."
+      : proposal.kind === "unaffected"
+        ? "Read the claim and confirm it contains no figures and relies on none."
+        : "Choose the cell for the claim's period end, read it with read_source_excerpt, check its column header says as restated, convert the printed value to base units using the scale note, and submit that value with that locator id.";
+  return {
+    kind: "verify_replacement",
+    key: `verify:${proposal.id}:${attempt}`,
+    caseId: proposal.caseId,
+    epoch: proposal.epoch,
+    trigger,
+    message: `Verify proposal ${proposal.id} (kind ${proposal.kind}) from ${proposal.proposerAgent}.${retried ? " An earlier check of this proposal ended without a recorded verdict." : ""} Your check only counts once submit_verification succeeds. Use get_proposal to see the claim, its identity and the amendment cells that share it. ${how}`,
+  };
+}
+
+/** The write each task exists to make. A loop that ends without it gets one reminder before it may finish. */
+const REQUIRED_TOOL: Record<string, string> = {
+  classify_filing: "propose_disclosure_scope",
+  link_amendment: "propose_amendment_link",
+  check_scope: "check_disclosure_scope",
+  verify_replacement: "submit_verification",
+  review_conclusions: "review_draft_conclusions",
+  propose_replacements: "propose_replacement",
+  write_warning: "propose_warning_text",
+  draft_revision: "propose_revision_patch",
+  revise_draft: "propose_revision_patch",
+  extract_claims: "propose_claim",
+  verify_bindings: "confirm_binding",
+};
 
 const TRIGGERS: Record<AgentRole, string[]> = {
   "filing-monitor": ["filing.discovered", "filing.non_reliance_detected", "challenge.raised", "runtime.reconcile"],
@@ -275,13 +307,23 @@ export class WorkspaceRuntime {
     for (const task of tasks) await this.launch(role, task, 1);
   }
 
-  private interception(runId: string, caseId: string | null, epoch: number | null, context: ModelContext, tools: Tool[]): InterceptionHandler {
+  private interception(runId: string, caseId: string | null, epoch: number | null, context: ModelContext, tools: Tool[], taskKind: string): InterceptionHandler {
     let functionCalls = 0;
+    let nudges = 0;
+    const requiredTool = REQUIRED_TOOL[taskKind];
     const stop = (text: string): ExecutableTransition => ({ nextStateId: "model_message", input: { answer: ModelMessageItem.rehydrate({ text }) } });
     return {
-      isSatisfiedBy: (transition) => transition.nextStateId === "inference" || transition.nextStateId === "function_call",
+      isSatisfiedBy: (transition) => transition.nextStateId === "inference" || transition.nextStateId === "function_call" || transition.nextStateId === "model_message",
       handle: async (transition) => {
         if (transition.nextStateId === "function_call") functionCalls += 1;
+        if (transition.nextStateId === "model_message") {
+          if (!requiredTool || nudges >= 1) return transition;
+          const done = await db.$count(toolCall, and(eq(toolCall.agentRunId, runId), eq(toolCall.toolName, requiredTool), eq(toolCall.ok, true)));
+          if (done) return transition;
+          nudges += 1;
+          const reminder = `Completion check: this task is only recorded when ${requiredTool} succeeds, and it has not been called successfully in this run. If the evidence supports it, call ${requiredTool} now. If you deliberately decided not to, reply with one sentence saying why.`;
+          return { nextStateId: "message_received", input: { content: reminder, input: { model: ENV.MODEL_ID, maxOutputTokens: ENV.MODEL_MAX_OUTPUT_TOKENS, ...(ENV.MODEL_REASONING_EFFORT ? { reasoningEffort: ENV.MODEL_REASONING_EFFORT } : {}), tools, context } } };
+        }
         const current = caseId ? this.state.cases.get(caseId) : undefined;
         if (current && epoch !== null && current.epoch > epoch) {
           this.staleRuns.add(runId);
@@ -360,7 +402,7 @@ export class WorkspaceRuntime {
         originalLog(...args);
       };
       try {
-        this.rt.runLoop(agent.getId(), message, { model: ENV.MODEL_ID, maxOutputTokens: ENV.MODEL_MAX_OUTPUT_TOKENS, ...(ENV.MODEL_REASONING_EFFORT ? { reasoningEffort: ENV.MODEL_REASONING_EFFORT } : {}), tools, context }, this.interception(runId, task.caseId, task.epoch, context, tools));
+        this.rt.runLoop(agent.getId(), message, { model: ENV.MODEL_ID, maxOutputTokens: ENV.MODEL_MAX_OUTPUT_TOKENS, ...(ENV.MODEL_REASONING_EFFORT ? { reasoningEffort: ENV.MODEL_REASONING_EFFORT } : {}), tools, context }, this.interception(runId, task.caseId, task.epoch, context, tools, task.kind));
       } finally {
         console.log = originalLog;
       }
@@ -444,7 +486,7 @@ async function planTasks(workspaceId: string, role: AgentRole, type: string, pay
       if (proposal.proposerAgent === "financial-verifier") continue;
       const checks = await db.$count(agentRun, and(eq(agentRun.workspaceId, workspaceId), sql`${agentRun.taskKey} like ${`verify:${proposal.id}%`}`, eq(agentRun.status, "COMPLETED")));
       if (checks >= 2) continue;
-      tasks.push({ kind: "verify_replacement", key: `verify:${proposal.id}:${checks + 1}`, caseId: proposal.caseId, epoch: proposal.epoch, trigger: type, message: `Verify proposal ${proposal.id} (kind ${proposal.kind}) from ${proposal.proposerAgent}.${checks ? " An earlier check of this proposal ended without a recorded verdict." : ""} Your check only counts once submit_verification succeeds. Use get_proposal to see the claim, its identity and the amendment cells that share it. ${proposal.kind === "formula" ? "Recompute it with compute_formula and submit the value it returns, copied in full." : proposal.kind === "unaffected" ? "Read the claim and confirm it contains no figures and relies on none." : "Choose the cell for the claim's period end, read it with read_source_excerpt, check its column header says as restated, convert the printed value to base units using the scale note, and submit that value with that locator id."}` });
+      tasks.push(verifyTask(proposal, `${checks + 1}`, type, checks > 0));
     }
   }
 

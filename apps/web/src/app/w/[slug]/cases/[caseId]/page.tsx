@@ -128,6 +128,33 @@ function ImpactTable({ impacts, onSelect, selected }: { impacts: ImpactRow[]; on
   );
 }
 
+function RecheckButton({ caseId, proposalId }: { caseId: string; proposalId: string }) {
+  const { workspaceId, principal, canAct } = useWorkspace();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  if (principal.role === "analyst") return null;
+  return (
+    <button
+      type="button"
+      className="btn btn-sm"
+      disabled={!canAct || busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          await apiSend("POST", ws(workspaceId, `/cases/${caseId}/recheck`), { proposalId }, { idempotencyKey: newKey() });
+          toast("The Financial Verifier is running another independent check");
+        } catch (e) {
+          toast(e instanceof Error ? e.message : "Could not start a check", "error");
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      {busy ? "Starting" : "Ask for another independent check"}
+    </button>
+  );
+}
+
 function ImpactDetail({ row, detail }: { row: ImpactRow; detail: CaseDetail }) {
   const proposals = detail.proposals.filter((p) => p.claimId === row.claimId);
   return (
@@ -169,6 +196,7 @@ function ImpactDetail({ row, detail }: { row: ImpactRow; detail: CaseDetail }) {
                     </ul>
                   ) : null}
                   {p.statusReason ? <p className="small muted">{p.statusReason}</p> : null}
+                  {p.status === "PROPOSED" && p.epoch === detail.case.evidenceEpoch && !detail.agentRuns.some((r) => r.status === "STARTED" && r.taskKey.startsWith(`verify:${p.id}`)) ? <RecheckButton caseId={detail.case.id} proposalId={p.id} /> : null}
                 </div>
               );
             })}

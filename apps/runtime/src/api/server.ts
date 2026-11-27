@@ -6,10 +6,10 @@ import cors from "@fastify/cors";
 import { and, asc, count, desc, eq, gt, gte } from "drizzle-orm";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { z, ZodError } from "zod";
-import { runtimeFor } from "../agents/host.js";
+import { runtimeFor, verifyTask } from "../agents/host.js";
 import { ENV } from "../config/env.js";
 import { db, sqlClient } from "../db/client.js";
-import { agentRun, correctionNotice, delivery, domainEvent, issuer, researchReport, researchRevision, syntheticRecipient, watchSubscription, workspace } from "../db/schema.js";
+import { agentRun, correctionNotice, delivery, domainEvent, issuer, replacementProposal, researchReport, researchRevision, syntheticRecipient, watchSubscription, workspace } from "../db/schema.js";
 import { advanceReplay } from "../domain/cases.js";
 import { DomainError, assert } from "../domain/errors.js";
 import { eventBus, serializeEvent } from "../domain/events.js";
@@ -258,6 +258,21 @@ export async function buildServer(): Promise<FastifyInstance> {
     });
     return ok(reply, result, 202);
   });
+  app.post<{ Params: Params & { caseId: string } }>(`${W}/cases/:caseId/recheck`, async (request, reply) => {
+    const p = await requirePrincipal(request, request.params.workspaceId, ["editor", "operator"]);
+    const body = z.object({ proposalId: UUID }).parse(request.body);
+    const [proposal] = await db.select().from(replacementProposal).where(and(eq(replacementProposal.id, body.proposalId), eq(replacementProposal.workspaceId, p.workspaceId), eq(replacementProposal.caseId, UUID.parse(request.params.caseId))));
+    assert(proposal, "NOT_FOUND", "proposal not found");
+    assert(proposal.status === "PROPOSED", "CONFLICT", "only proposals still waiting for a check can be rechecked");
+    const runtime = await runtimeFor(p.workspaceId);
+    const result = await withIdempotency(p.workspaceId, "recheck", idempotencyKey(request), body, async () => {
+      const launched = await runtime.launch("financial-verifier", verifyTask(proposal, `requested-${Date.now()}`, "human.recheck_requested", true), 1);
+      assert(launched, "CONFLICT", "a check of this proposal is already running");
+      return launched;
+    });
+    return ok(reply, result, 202);
+  });
+
   app.post<{ Params: Params & { caseId: string } }>(`${W}/cases/:caseId/request-revision`, async (request, reply) => {
     const p = await requirePrincipal(request, request.params.workspaceId, ["editor", "analyst"]);
     const body = z.object({ reportId: UUID }).parse(request.body);
