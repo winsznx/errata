@@ -68,7 +68,7 @@ export function DocumentView({ blocks, claims, claimStates = {}, selectedClaimId
         const blockClaims = claims.filter((c) => c.blockId === block.id);
         if (block.kind === "heading") {
           if (hideTitle && index === 0) return null;
-          return index === 0 ? <h1 key={block.id}>{block.text}</h1> : <h2 key={block.id}>{block.text}</h2>;
+          return index === 0 ? <h1 key={block.id}>{render(block.text, 0, blockClaims)}</h1> : <h2 key={block.id}>{render(block.text, 0, blockClaims)}</h2>;
         }
         if (block.kind === "table") {
           const rows = block.text.split("\n").map((r) => r.split(" | "));

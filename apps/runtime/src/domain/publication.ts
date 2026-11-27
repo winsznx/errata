@@ -327,6 +327,9 @@ export async function reviewConclusions(ctx: ActorContext, input: { candidateId:
     const review: ConclusionReview = { verdict: input.verdict, explanation: input.explanation.slice(0, 1200), reviewer: ctx.actor.id, epoch: caseRow.evidenceEpoch, at: new Date().toISOString() };
     const nextMeta = { ...meta, conclusionReview: review };
     await tx.update(researchRevision).set({ noticeDraft: nextMeta as unknown as Record<string, unknown> }).where(eq(researchRevision.id, candidate.id));
+    if (input.verdict === "consistent") {
+      await tx.update(challenge).set({ status: "RESOLVED", resolution: `Conclusions in draft ${candidate.id} checked as consistent`, resolvedAt: new Date() }).where(and(eq(challenge.caseId, caseRow.id), eq(challenge.targetKind, "candidate_conclusion"), eq(challenge.status, "OPEN")));
+    }
     const { blockers } = await evaluateCandidate(tx, candidate.id);
     await tx.update(researchRevision).set({ candidateState: blockers.length ? "BLOCKED" : "READY", noticeDraft: { ...nextMeta, blockers } as unknown as Record<string, unknown> }).where(eq(researchRevision.id, candidate.id));
     if (input.verdict === "inconsistent") {
@@ -335,8 +338,6 @@ export async function reviewConclusions(ctx: ActorContext, input: { candidateId:
         .values({ workspaceId: ctx.workspaceId, caseId: caseRow.id, targetKind: "candidate_conclusion", targetId: candidate.id, epoch: caseRow.evidenceEpoch, raisedBy: ctx.actor.id, reasonCode: "CONCLUSION_INCONSISTENT", explanation: review.explanation, refs: [candidate.id], status: "OPEN" })
         .returning();
       await record({ workspaceId: ctx.workspaceId, type: "challenge.raised", actor: ctx.actor, caseId: caseRow.id, evidenceEpoch: caseRow.evidenceEpoch, payload: { challengeId: raised!.id, targetKind: "candidate_conclusion", targetId: candidate.id, reportId: candidate.reportId, reasonCode: "CONCLUSION_INCONSISTENT", explanation: review.explanation.slice(0, 500) } });
-    } else {
-      await tx.update(challenge).set({ status: "RESOLVED", resolution: `Conclusions in draft ${candidate.id} checked as consistent`, resolvedAt: new Date() }).where(and(eq(challenge.caseId, caseRow.id), eq(challenge.targetKind, "candidate_conclusion"), eq(challenge.status, "OPEN")));
     }
     await record({ workspaceId: ctx.workspaceId, type: "report.conclusions_reviewed", actor: ctx.actor, caseId: caseRow.id, evidenceEpoch: caseRow.evidenceEpoch, payload: { candidateId: candidate.id, reportId: candidate.reportId, verdict: input.verdict, explanation: review.explanation.slice(0, 400), agentRunId: ctx.agentRunId ?? null } });
     await recomputeCaseStatus(tx, caseRow.id, record);
@@ -414,7 +415,8 @@ export async function reissue(ctx: ActorContext & { actorName: string }, input: 
     await tx.update(researchRevision).set({ documentState: "SUPERSEDED" }).where(eq(researchRevision.id, base.id));
     await tx.update(researchRevision).set({ version, documentState: "PUBLISHED", candidateState: "PUBLISHED", publishedAt, kind: "published", publicationLabel: "Reissued in this demo workspace" }).where(eq(researchRevision.id, candidate.id));
     const otherWarnings = await tx.$count(reportWarning, and(eq(reportWarning.revisionId, candidate.id), eq(reportWarning.state, "ACTIVE")));
-    await tx.update(researchReport).set({ currentRevisionId: candidate.id, reliability: otherWarnings ? "UNDER_REVIEW" : "CLEAR", documentState: "PUBLISHED", updatedAt: publishedAt, rowVersion: report.rowVersion + 1 }).where(eq(researchReport.id, report.id));
+    const heading = candidate.blocks.find((b) => b.kind === "heading");
+    await tx.update(researchReport).set({ title: heading?.text.slice(0, 200) ?? report.title, currentRevisionId: candidate.id, reliability: otherWarnings ? "UNDER_REVIEW" : "CLEAR", documentState: "PUBLISHED", updatedAt: publishedAt, rowVersion: report.rowVersion + 1 }).where(eq(researchReport.id, report.id));
     await tx.insert(publicationStatusEvent).values({ workspaceId: ctx.workspaceId, reportId: report.id, revisionId: base.id, type: "SUPERSEDED", caseId: candidate.caseId, actor: ctx.actor.id, reason: `Superseded by version ${version}` });
     await tx.insert(publicationStatusEvent).values({ workspaceId: ctx.workspaceId, reportId: report.id, revisionId: candidate.id, type: "REISSUED", caseId: candidate.caseId, actor: ctx.actor.id, reason: `Version ${version} approved by ${ctx.actorName}` });
     const meta = candidate.noticeDraft as unknown as CandidateMeta;

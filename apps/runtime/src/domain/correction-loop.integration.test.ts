@@ -20,7 +20,7 @@ import {
 import { advanceReplay, checkDisclosureScope, linkAmendment, proposeDisclosureScope, type ActorContext } from "./cases.js";
 import { findFactCandidates, proposeReplacement, submitVerification } from "./claims-work.js";
 import { DomainError } from "./errors.js";
-import { proposeRevisionPatch, reissue, reviewCandidate } from "./publication.js";
+import { proposeRevisionPatch, reissue, reviewCandidate, reviewConclusions } from "./publication.js";
 import { createScenarioWorkspace } from "./workspace.js";
 
 const human = { kind: "human" as const, id: "editor:test" };
@@ -71,7 +71,7 @@ describe("Nocera correction loop through the domain guards", () => {
     await expect(proposeDisclosureScope(monitor, { sourceId: notice.id, classification: "NON_RELIANCE", periods: [{ ...periods[0]!, end: "2023-12-31" }], locatorIds: [scopeLocator.id], summary: "bad" })).rejects.toBeInstanceOf(DomainError);
     const proposed = await proposeDisclosureScope(monitor, { sourceId: notice.id, classification: "NON_RELIANCE", periods, locatorIds: [scopeLocator.id], summary: "Board concluded statements should no longer be relied upon" });
     const caseId = proposed.result.caseId!;
-    expect(proposed.result).toMatchObject({ impacts: 8 });
+    expect(proposed.result).toMatchObject({ impacts: 9 });
 
     await expect(checkDisclosureScope(monitor, { caseId, verdict: "confirm", periods, locatorIds: [scopeLocator.id], explanation: "self" })).rejects.toMatchObject({ code: "SELF_VERIFICATION" });
     const confirmed = await checkDisclosureScope(verifierBase, { caseId, verdict: "confirm", periods, locatorIds: [scopeLocator.id], explanation: "Independently read Item 4.02" });
@@ -134,13 +134,19 @@ describe("Nocera correction loop through the domain guards", () => {
       { blockId: blockOf("Working capital, March 31, 2025"), text: `That leaves working capital of {{claim:${id("Working capital, March 31, 2025")}}} and a current ratio of {{claim:${id("Current ratio, March 31, 2025")}}}.` },
       { blockId: blockOf("Table: total current assets"), text: `Measure | March 31, 2025, as restated\nTotal current assets | {{claim:${id("Table: total current assets")}}}\nTotal current liabilities | {{claim:${id("Table: total current liabilities")}}}\nWorking capital | {{claim:${id("Table: working capital")}}}` },
       { blockId: blockOf("Liquidity conclusion"), text: "On the restated figures, current liabilities exceed current assets, so the earlier view that the balance sheet showed room to spare no longer holds." },
+      { blockId: blockOf("Headline conclusion"), text: "Nocera Q1 2025: restated figures show a working capital deficit" },
     ];
     await expect(proposeRevisionPatch({ workspaceId, actor: { kind: "agent", id: "publication-editor" }, epoch: 2 }, { caseId, reportId: nocera.id, baseRevisionId: base.id, patches: [{ blockId: patches[0]!.blockId, text: "Current assets were $670,496." }], notice: { whatChanged: "x", why: "y", conclusions: "z" } })).rejects.toMatchObject({ code: "INVALID_INPUT" });
     const drafted = await proposeRevisionPatch(
       { workspaceId, actor: { kind: "agent", id: "publication-editor" }, epoch: 2 },
       { caseId, reportId: nocera.id, baseRevisionId: base.id, patches, notice: { whatChanged: "Current assets, current liabilities, working capital and the current ratio for March 31, 2025 now use the restated balance sheet.", why: "Nocera said its earlier statements should no longer be relied upon and filed restated figures in 10-K/A No. 2.", conclusions: "The liquidity conclusion was rewritten because restated current liabilities exceed current assets." } },
     );
-    expect(drafted.result.blockers).toEqual([]);
+    expect(drafted.result.blockers).toEqual(["The rewritten conclusion has not yet been checked against the corrected figures"]);
+    await expect(reviewConclusions({ workspaceId, actor: { kind: "agent", id: "publication-editor" }, epoch: 2 }, { candidateId: drafted.result.candidateId, verdict: "consistent", explanation: "self review" })).rejects.toMatchObject({ code: "SELF_VERIFICATION" });
+    const flagged = await reviewConclusions({ ...verifierBase, epoch: 2 }, { candidateId: drafted.result.candidateId, verdict: "inconsistent", explanation: "Test: the headline must not claim a surplus" });
+    expect(flagged.result.blockers.some((b) => b.includes("inconsistent"))).toBe(true);
+    const cleared = await reviewConclusions({ ...verifierBase, epoch: 2 }, { candidateId: drafted.result.candidateId, verdict: "consistent", explanation: "Every rewritten sentence matches negative working capital and a ratio below one" });
+    expect(cleared.result.blockers).toEqual([]);
     const candidate = (await db.query.researchRevision.findFirst({ where: eq(researchRevision.id, drafted.result.candidateId) }))!;
     expect(candidate.markdown).toContain("$670,496");
     expect(candidate.markdown).toContain("-$123,653");
@@ -162,6 +168,7 @@ describe("Nocera correction loop through the domain guards", () => {
     expect(notices).toHaveLength(1);
     const deliveries = await db.select().from(delivery).where(and(eq(delivery.noticeId, notices[0]!.id)));
     expect(deliveries).toHaveLength(3);
+    expect(after.title).toBe("Nocera Q1 2025: restated figures show a working capital deficit");
     const finalCase = await db.query.correctionCase.findFirst({ where: eq(correctionCase.id, caseId) });
     expect(["RESOLVED", "PARTIALLY_REISSUED"]).toContain(finalCase!.status);
   });

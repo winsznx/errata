@@ -1,69 +1,386 @@
 {
   "schemaVersion": 1,
   "notice": "Synthetic research written for the Errata demo. The publisher, analysts and recipients are fictional. Every financial figure is bound to a public SEC filing that was available on the note's as-of date.",
-  "publisher": { "name": "Ledgerline Research", "label": "Synthetic publisher" },
+  "publisher": {
+    "name": "Ledgerline Research",
+    "label": "Synthetic publisher"
+  },
   "recipients": [
-    { "displayName": "Avery Collins", "organisation": "Example Pension Office", "address": "avery.collins@pension.example.invalid" },
-    { "displayName": "Jordan Patel", "organisation": "Example Family Office", "address": "jordan.patel@family-office.example.invalid" },
-    { "displayName": "Morgan Reyes", "organisation": "Example Credit Desk", "address": "morgan.reyes@credit-desk.example.invalid" }
+    {
+      "displayName": "Avery Collins",
+      "organisation": "Example Pension Office",
+      "address": "avery.collins@pension.example.invalid"
+    },
+    {
+      "displayName": "Jordan Patel",
+      "organisation": "Example Family Office",
+      "address": "jordan.patel@family-office.example.invalid"
+    },
+    {
+      "displayName": "Morgan Reyes",
+      "organisation": "Example Credit Desk",
+      "address": "morgan.reyes@credit-desk.example.invalid"
+    }
   ],
   "reports": [
     {
       "key": "nocera-liquidity",
       "file": "nocera-q1-2025-liquidity.md",
-      "issuerCiks": ["0001756180"],
+      "issuerCiks": [
+        "0001756180"
+      ],
       "asOf": "2025-05-20T14:00:00Z",
-      "sourceRefs": ["nocera-10q-q1-2025"],
-      "recipients": ["Avery Collins", "Jordan Patel", "Morgan Reyes"],
+      "sourceRefs": [
+        "nocera-10q-q1-2025"
+      ],
+      "recipients": [
+        "Avery Collins",
+        "Jordan Patel",
+        "Morgan Reyes"
+      ],
       "claims": [
-        { "key": "ca", "match": "$1,275,416", "occurrence": 0, "category": "DIRECT", "label": "Total current assets, March 31, 2025", "binding": { "sourceRef": "nocera-10q-q1-2025", "concept": "us-gaap:AssetsCurrent", "periodEnd": "2025-03-31" } },
-        { "key": "cl", "match": "$706,384", "occurrence": 0, "category": "DIRECT", "label": "Total current liabilities, March 31, 2025", "binding": { "sourceRef": "nocera-10q-q1-2025", "concept": "us-gaap:LiabilitiesCurrent", "periodEnd": "2025-03-31" } },
-        { "key": "wc", "match": "$569,032", "occurrence": 0, "category": "DERIVED", "label": "Working capital, March 31, 2025", "formula": { "op": "sub", "args": [{ "op": "ref", "ref": "ca" }, { "op": "ref", "ref": "cl" }] }, "displayPrecision": 0, "displayUnit": "USD" },
-        { "key": "ratio", "match": "1.81", "occurrence": 0, "category": "DERIVED", "label": "Current ratio, March 31, 2025", "formula": { "op": "div", "args": [{ "op": "ref", "ref": "ca" }, { "op": "ref", "ref": "cl" }] }, "displayPrecision": 2, "displayUnit": "pure" },
-        { "key": "t-ca", "match": "$1,275,416", "occurrence": 1, "category": "DIRECT", "label": "Table: total current assets", "binding": { "sourceRef": "nocera-10q-q1-2025", "concept": "us-gaap:AssetsCurrent", "periodEnd": "2025-03-31" } },
-        { "key": "t-cl", "match": "$706,384", "occurrence": 1, "category": "DIRECT", "label": "Table: total current liabilities", "binding": { "sourceRef": "nocera-10q-q1-2025", "concept": "us-gaap:LiabilitiesCurrent", "periodEnd": "2025-03-31" } },
-        { "key": "t-wc", "match": "$569,032", "occurrence": 1, "category": "DERIVED", "label": "Table: working capital", "formula": { "op": "sub", "args": [{ "op": "ref", "ref": "ca" }, { "op": "ref", "ref": "cl" }] }, "displayPrecision": 0, "displayUnit": "USD" },
-        { "key": "view", "match": "current assets cover short-term obligations with room to spare, and the balance sheet does not point to an immediate need for new financing", "occurrence": 0, "category": "QUALITATIVE", "label": "Liquidity conclusion", "dependsOn": ["wc", "ratio"] },
-        { "key": "dates", "match": "March 31, 2025", "occurrence": 0, "category": "OTHER", "label": "Reporting period reference", "material": false, "reason": "Period label, not a financial figure" }
+        {
+          "key": "ca",
+          "match": "$1,275,416",
+          "occurrence": 0,
+          "category": "DIRECT",
+          "label": "Total current assets, March 31, 2025",
+          "binding": {
+            "sourceRef": "nocera-10q-q1-2025",
+            "concept": "us-gaap:AssetsCurrent",
+            "periodEnd": "2025-03-31"
+          }
+        },
+        {
+          "key": "cl",
+          "match": "$706,384",
+          "occurrence": 0,
+          "category": "DIRECT",
+          "label": "Total current liabilities, March 31, 2025",
+          "binding": {
+            "sourceRef": "nocera-10q-q1-2025",
+            "concept": "us-gaap:LiabilitiesCurrent",
+            "periodEnd": "2025-03-31"
+          }
+        },
+        {
+          "key": "wc",
+          "match": "$569,032",
+          "occurrence": 0,
+          "category": "DERIVED",
+          "label": "Working capital, March 31, 2025",
+          "formula": {
+            "op": "sub",
+            "args": [
+              {
+                "op": "ref",
+                "ref": "ca"
+              },
+              {
+                "op": "ref",
+                "ref": "cl"
+              }
+            ]
+          },
+          "displayPrecision": 0,
+          "displayUnit": "USD"
+        },
+        {
+          "key": "ratio",
+          "match": "1.81",
+          "occurrence": 0,
+          "category": "DERIVED",
+          "label": "Current ratio, March 31, 2025",
+          "formula": {
+            "op": "div",
+            "args": [
+              {
+                "op": "ref",
+                "ref": "ca"
+              },
+              {
+                "op": "ref",
+                "ref": "cl"
+              }
+            ]
+          },
+          "displayPrecision": 2,
+          "displayUnit": "pure"
+        },
+        {
+          "key": "t-ca",
+          "match": "$1,275,416",
+          "occurrence": 1,
+          "category": "DIRECT",
+          "label": "Table: total current assets",
+          "binding": {
+            "sourceRef": "nocera-10q-q1-2025",
+            "concept": "us-gaap:AssetsCurrent",
+            "periodEnd": "2025-03-31"
+          }
+        },
+        {
+          "key": "t-cl",
+          "match": "$706,384",
+          "occurrence": 1,
+          "category": "DIRECT",
+          "label": "Table: total current liabilities",
+          "binding": {
+            "sourceRef": "nocera-10q-q1-2025",
+            "concept": "us-gaap:LiabilitiesCurrent",
+            "periodEnd": "2025-03-31"
+          }
+        },
+        {
+          "key": "t-wc",
+          "match": "$569,032",
+          "occurrence": 1,
+          "category": "DERIVED",
+          "label": "Table: working capital",
+          "formula": {
+            "op": "sub",
+            "args": [
+              {
+                "op": "ref",
+                "ref": "ca"
+              },
+              {
+                "op": "ref",
+                "ref": "cl"
+              }
+            ]
+          },
+          "displayPrecision": 0,
+          "displayUnit": "USD"
+        },
+        {
+          "key": "view",
+          "match": "current assets cover short-term obligations with room to spare, and the balance sheet does not point to an immediate need for new financing",
+          "occurrence": 0,
+          "category": "QUALITATIVE",
+          "label": "Liquidity conclusion",
+          "dependsOn": [
+            "wc",
+            "ratio"
+          ]
+        },
+        {
+          "key": "dates",
+          "match": "March 31, 2025",
+          "occurrence": 0,
+          "category": "OTHER",
+          "label": "Reporting period reference",
+          "material": false,
+          "reason": "Period label, not a financial figure"
+        },
+        {
+          "key": "title",
+          "match": "liquidity covers near-term obligations",
+          "occurrence": 0,
+          "category": "QUALITATIVE",
+          "label": "Headline conclusion",
+          "dependsOn": [
+            "wc",
+            "ratio"
+          ]
+        }
       ]
     },
     {
       "key": "joint-snapshot",
       "file": "joint-q1-2025-balance-sheet.md",
-      "issuerCiks": ["0001612630"],
+      "issuerCiks": [
+        "0001612630"
+      ],
       "asOf": "2025-05-15T14:00:00Z",
-      "sourceRefs": ["joint-10q-q1-2025"],
-      "recipients": ["Jordan Patel", "Morgan Reyes"],
+      "sourceRefs": [
+        "joint-10q-q1-2025"
+      ],
+      "recipients": [
+        "Jordan Patel",
+        "Morgan Reyes"
+      ],
       "claims": [
-        { "key": "ca", "match": "$67,831,378", "occurrence": 0, "category": "DIRECT", "label": "Total current assets, March 31, 2025", "binding": { "sourceRef": "joint-10q-q1-2025", "concept": "us-gaap:AssetsCurrent", "periodEnd": "2025-03-31" } },
-        { "key": "cl", "match": "$42,707,086", "occurrence": 0, "category": "DIRECT", "label": "Total current liabilities, March 31, 2025", "binding": { "sourceRef": "joint-10q-q1-2025", "concept": "us-gaap:LiabilitiesCurrent", "periodEnd": "2025-03-31" } },
-        { "key": "wc", "match": "$25,124,292", "occurrence": 0, "category": "DERIVED", "label": "Working capital, March 31, 2025", "formula": { "op": "sub", "args": [{ "op": "ref", "ref": "ca" }, { "op": "ref", "ref": "cl" }] }, "displayPrecision": 0, "displayUnit": "USD" }
+        {
+          "key": "ca",
+          "match": "$67,831,378",
+          "occurrence": 0,
+          "category": "DIRECT",
+          "label": "Total current assets, March 31, 2025",
+          "binding": {
+            "sourceRef": "joint-10q-q1-2025",
+            "concept": "us-gaap:AssetsCurrent",
+            "periodEnd": "2025-03-31"
+          }
+        },
+        {
+          "key": "cl",
+          "match": "$42,707,086",
+          "occurrence": 0,
+          "category": "DIRECT",
+          "label": "Total current liabilities, March 31, 2025",
+          "binding": {
+            "sourceRef": "joint-10q-q1-2025",
+            "concept": "us-gaap:LiabilitiesCurrent",
+            "periodEnd": "2025-03-31"
+          }
+        },
+        {
+          "key": "wc",
+          "match": "$25,124,292",
+          "occurrence": 0,
+          "category": "DERIVED",
+          "label": "Working capital, March 31, 2025",
+          "formula": {
+            "op": "sub",
+            "args": [
+              {
+                "op": "ref",
+                "ref": "ca"
+              },
+              {
+                "op": "ref",
+                "ref": "cl"
+              }
+            ]
+          },
+          "displayPrecision": 0,
+          "displayUnit": "USD"
+        }
       ]
     },
     {
       "key": "roundup",
       "file": "small-cap-roundup-may-2025.md",
-      "issuerCiks": ["0001756180", "0001612630"],
+      "issuerCiks": [
+        "0001756180",
+        "0001612630"
+      ],
       "asOf": "2025-05-28T14:00:00Z",
       "sourceRefs": [],
-      "recipients": ["Avery Collins"],
+      "recipients": [
+        "Avery Collins"
+      ],
       "claims": [
-        { "key": "nocera-mention", "match": "remains on our watchlist after its first-quarter filing", "occurrence": 0, "category": "QUALITATIVE", "label": "Nocera watchlist mention", "material": false, "reason": "Mentions the issuer without relying on any reported figure" }
+        {
+          "key": "nocera-mention",
+          "match": "remains on our watchlist after its first-quarter filing",
+          "occurrence": 0,
+          "category": "QUALITATIVE",
+          "label": "Nocera watchlist mention",
+          "material": false,
+          "reason": "Mentions the issuer without relying on any reported figure"
+        }
       ]
     },
     {
       "key": "xencor-liquidity",
       "file": "xencor-q1-2024-liquidity.md",
-      "issuerCiks": ["0001326732"],
+      "issuerCiks": [
+        "0001326732"
+      ],
       "asOf": "2024-05-20T14:00:00Z",
-      "sourceRefs": ["xencor-10q-q1-2024"],
-      "recipients": ["Avery Collins", "Morgan Reyes"],
+      "sourceRefs": [
+        "xencor-10q-q1-2024"
+      ],
+      "recipients": [
+        "Avery Collins",
+        "Morgan Reyes"
+      ],
       "claims": [
-        { "key": "ca", "match": "$562,252 thousand", "occurrence": 0, "category": "DIRECT", "label": "Total current assets, March 31, 2024", "displayScale": 3, "binding": { "sourceRef": "xencor-10q-q1-2024", "concept": "us-gaap:AssetsCurrent", "periodEnd": "2024-03-31" } },
-        { "key": "cl", "match": "$79,402 thousand", "occurrence": 0, "category": "DIRECT", "label": "Total current liabilities, March 31, 2024", "displayScale": 3, "binding": { "sourceRef": "xencor-10q-q1-2024", "concept": "us-gaap:LiabilitiesCurrent", "periodEnd": "2024-03-31" } },
-        { "key": "wc", "match": "$482,850 thousand", "occurrence": 0, "category": "DERIVED", "label": "Working capital, March 31, 2024", "displayScale": 3, "formula": { "op": "sub", "args": [{ "op": "ref", "ref": "ca" }, { "op": "ref", "ref": "cl" }] }, "displayPrecision": 0, "displayUnit": "USD" },
-        { "key": "ratio", "match": "7.08", "occurrence": 0, "category": "DERIVED", "label": "Current ratio, March 31, 2024", "formula": { "op": "div", "args": [{ "op": "ref", "ref": "ca" }, { "op": "ref", "ref": "cl" }] }, "displayPrecision": 2, "displayUnit": "pure" },
-        { "key": "view", "match": "The current-asset position comfortably exceeds near-term obligations.", "occurrence": 0, "category": "QUALITATIVE", "label": "Liquidity conclusion", "dependsOn": ["wc", "ratio"] }
+        {
+          "key": "ca",
+          "match": "$562,252 thousand",
+          "occurrence": 0,
+          "category": "DIRECT",
+          "label": "Total current assets, March 31, 2024",
+          "displayScale": 3,
+          "binding": {
+            "sourceRef": "xencor-10q-q1-2024",
+            "concept": "us-gaap:AssetsCurrent",
+            "periodEnd": "2024-03-31"
+          }
+        },
+        {
+          "key": "cl",
+          "match": "$79,402 thousand",
+          "occurrence": 0,
+          "category": "DIRECT",
+          "label": "Total current liabilities, March 31, 2024",
+          "displayScale": 3,
+          "binding": {
+            "sourceRef": "xencor-10q-q1-2024",
+            "concept": "us-gaap:LiabilitiesCurrent",
+            "periodEnd": "2024-03-31"
+          }
+        },
+        {
+          "key": "wc",
+          "match": "$482,850 thousand",
+          "occurrence": 0,
+          "category": "DERIVED",
+          "label": "Working capital, March 31, 2024",
+          "displayScale": 3,
+          "formula": {
+            "op": "sub",
+            "args": [
+              {
+                "op": "ref",
+                "ref": "ca"
+              },
+              {
+                "op": "ref",
+                "ref": "cl"
+              }
+            ]
+          },
+          "displayPrecision": 0,
+          "displayUnit": "USD"
+        },
+        {
+          "key": "ratio",
+          "match": "7.08",
+          "occurrence": 0,
+          "category": "DERIVED",
+          "label": "Current ratio, March 31, 2024",
+          "formula": {
+            "op": "div",
+            "args": [
+              {
+                "op": "ref",
+                "ref": "ca"
+              },
+              {
+                "op": "ref",
+                "ref": "cl"
+              }
+            ]
+          },
+          "displayPrecision": 2,
+          "displayUnit": "pure"
+        },
+        {
+          "key": "view",
+          "match": "The current-asset position comfortably exceeds near-term obligations.",
+          "occurrence": 0,
+          "category": "QUALITATIVE",
+          "label": "Liquidity conclusion",
+          "dependsOn": [
+            "wc",
+            "ratio"
+          ]
+        },
+        {
+          "key": "title",
+          "match": "a deep current-asset cushion",
+          "occurrence": 0,
+          "category": "QUALITATIVE",
+          "label": "Headline conclusion",
+          "dependsOn": [
+            "wc",
+            "ratio"
+          ]
+        }
       ]
     }
   ]
