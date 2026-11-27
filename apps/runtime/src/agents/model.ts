@@ -82,10 +82,11 @@ function groqModel(name: string): ModelEntry {
   if (!template) throw new Error("the pinned Mozaik SDK has no Chat Completions model profile to base a Groq model on");
   const connection = { baseURL: process.env.GROQ_BASE_URL ?? "https://api.groq.com/openai/v1", apiKey: process.env.GROQ_API_KEY };
   const sdkEndpoint = new OpenAIChatCompletions(undefined, connection);
-  const client = new OpenAI({ ...connection, timeout: ENV.MODEL_ATTEMPT_TIMEOUT_MS, maxRetries: 0 });
+  let client: OpenAI | undefined;
+  const http = () => (client ??= new OpenAI({ ...connection, timeout: ENV.MODEL_ATTEMPT_TIMEOUT_MS, maxRetries: 0 }));
   const endpoint: Endpoint = {
     endpointMapper: sdkEndpoint.endpointMapper,
-    infer: async (input) => sdkEndpoint.endpointMapper.toResponse(await client.chat.completions.create(sdkEndpoint.endpointMapper.toRequest(input))),
+    infer: async (input) => sdkEndpoint.endpointMapper.toResponse(await http().chat.completions.create(sdkEndpoint.endpointMapper.toRequest(input))),
     stream: (input) => sdkEndpoint.stream(input),
   };
   return { ...template, endpoint, specification: { ...template.specification, name, provider: "groq" } } as ModelEntry;
