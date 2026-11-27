@@ -209,8 +209,8 @@ importers:
         specifier: 3.10.2
         version: 3.10.2
       openai:
-        specifier: 6.49.0
-        version: 6.49.0(ws@8.23.0)(zod@4.6.7)
+        specifier: 7.64.0
+        version: 7.64.0(google-auth-library@10.9.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
       pdfkit:
         specifier: 0.21.0
         version: 0.21.0
@@ -2233,6 +2233,33 @@ packages:
       zod:
         optional: true
 
+  openai@7.64.0:
+    resolution: {integrity: sha512-2CpWvKic4bayEcX1uHhYc1KWauVIlV9e/8K8VVnvbosqL4En0OtesbY2qFCZHFF9X4dT1BKW4Dr+ncep9bh3Dw==}
+    engines: {node: '>=22.0.0'}
+    peerDependencies:
+      '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
+      '@smithy/hash-node': '>=4.3.0 <5'
+      '@smithy/signature-v4': '>=5.4.0 <6'
+      google-auth-library: '>=9.15.1 <12'
+      undici: '>=5 <9'
+      ws: ^8.21.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      '@aws-sdk/credential-provider-node':
+        optional: true
+      '@smithy/hash-node':
+        optional: true
+      '@smithy/signature-v4':
+        optional: true
+      google-auth-library:
+        optional: true
+      undici:
+        optional: true
+      ws:
+        optional: true
+      zod:
+        optional: true
+
   p-retry@4.6.2:
     resolution: {integrity: sha512-312Id396EbJdvRONlngUx0NydfrIQ5lsYu0znKVUzVvArzEIt08V1qhtyESbGVd1FGX7UKtiFp5uwKZdM8wIuQ==}
     engines: {node: '>=8'}
@@ -4234,6 +4261,13 @@ snapshots:
 
   openai@6.49.0(ws@8.23.0)(zod@4.6.7):
     optionalDependencies:
+      ws: 8.23.0
+      zod: 4.6.7
+
+  openai@7.64.0(google-auth-library@10.9.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7):
+    optionalDependencies:
+      google-auth-library: 10.9.1
+      undici: 7.30.2
       ws: 8.23.0
       zod: 4.6.7
 
