@@ -142,7 +142,7 @@ function RecheckButton({ caseId, proposalId }: { caseId: string; proposalId: str
         setBusy(true);
         try {
           await apiSend("POST", ws(workspaceId, `/cases/${caseId}/recheck`), { proposalId }, { idempotencyKey: newKey() });
-          toast("The Financial Verifier is running another independent check");
+          toast("Asked the Financial Verifier for another independent check");
         } catch (e) {
           toast(e instanceof Error ? e.message : "Could not start a check", "error");
         } finally {

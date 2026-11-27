@@ -119,7 +119,7 @@ const REQUIRED_TOOL: Record<string, string> = {
 
 const TRIGGERS: Record<AgentRole, string[]> = {
   "filing-monitor": ["filing.discovered", "filing.non_reliance_detected", "challenge.raised", "runtime.reconcile"],
-  "financial-verifier": ["filing.scope_proposed", "claim.replacement_proposed", "report.binding_check_requested", "report.revision_prepared", "runtime.reconcile"],
+  "financial-verifier": ["filing.scope_proposed", "claim.replacement_proposed", "verification.recheck_requested", "report.binding_check_requested", "report.revision_prepared", "runtime.reconcile"],
   "impact-analyst": ["report.extraction_requested", "filing.non_reliance_detected", "evidence.superseded", "claim.verified", "claim.rejected", "challenge.raised", "runtime.reconcile"],
   "publication-editor": ["report.warning_applied", "claim.verified", "case.status_changed", "report.changes_requested", "runtime.reconcile"],
 };
@@ -484,6 +484,10 @@ async function planTasks(workspaceId: string, role: AgentRole, type: string, pay
       .where(and(eq(replacementProposal.workspaceId, workspaceId), eq(replacementProposal.status, "PROPOSED"), eq(replacementProposal.epoch, correctionCase.evidenceEpoch)));
     for (const { proposal } of pendingProposals) {
       if (proposal.proposerAgent === "financial-verifier") continue;
+      if (type === "verification.recheck_requested" && payload.proposalId === proposal.id) {
+        tasks.push(verifyTask(proposal, `requested:${eventId}`, type, true));
+        continue;
+      }
       const checks = await db.$count(agentRun, and(eq(agentRun.workspaceId, workspaceId), sql`${agentRun.taskKey} like ${`verify:${proposal.id}%`}`, eq(agentRun.status, "COMPLETED")));
       if (checks >= 2) continue;
       tasks.push(verifyTask(proposal, `${checks + 1}`, type, checks > 0));

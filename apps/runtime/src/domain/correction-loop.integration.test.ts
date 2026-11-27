@@ -18,7 +18,7 @@ import {
   toolCall,
 } from "../db/schema.js";
 import { advanceReplay, checkDisclosureScope, linkAmendment, proposeDisclosureScope, type ActorContext } from "./cases.js";
-import { findFactCandidates, proposeReplacement, submitVerification } from "./claims-work.js";
+import { findFactCandidates, proposeReplacement, requestRecheck, submitVerification } from "./claims-work.js";
 import { DomainError } from "./errors.js";
 import { proposeRevisionPatch, reissue, reviewCandidate, reviewConclusions } from "./publication.js";
 import { createScenarioWorkspace } from "./workspace.js";
@@ -110,9 +110,13 @@ describe("Nocera correction loop through the domain guards", () => {
       expect(candidates.some((f) => f.column === "as_reported")).toBe(true);
       const { result } = await proposeReplacement(analyst, { caseId, claimId: target.id, kind: "fact", factIds: [restated.factId], rationale: "As restated column" });
       await expect(submitVerification({ ...verifier, actor: analyst.actor }, { proposalId: result.proposalId, verdict: "verified", locatorIds: [restated.locatorId], independentValue: restated.value, rationale: "self" })).rejects.toMatchObject({ code: "SELF_VERIFICATION" });
+      const editor = { workspaceId, actor: human, actorName: "Test Editor" };
+      const recheck = await requestRecheck(editor, { caseId, proposalId: result.proposalId });
+      expect(recheck.events.map((e) => [e.type, e.actorId, e.payload])).toEqual([["verification.recheck_requested", human.id, { proposalId: result.proposalId, claimId: target.id, actorName: "Test Editor" }]]);
       await recordRead(verifierRun, restated.locatorId);
       const verified = await submitVerification(verifier, { proposalId: result.proposalId, verdict: "verified", locatorIds: [restated.locatorId], independentValue: restated.value, rationale: "Read the restated table myself" });
       expect(verified.result.verified).toBe(true);
+      await expect(requestRecheck(editor, { caseId, proposalId: result.proposalId })).rejects.toMatchObject({ code: "CONFLICT" });
     }
     const wcClaims = ["Working capital, March 31, 2025", "Table: working capital", "Current ratio, March 31, 2025"].map((l) => byLabel(l).claim);
     const values: string[] = [];

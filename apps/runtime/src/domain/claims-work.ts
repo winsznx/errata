@@ -1,6 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, type DbOrTx, type Tx } from "../db/client.js";
 import {
+  agentRun,
   calculation,
   caseSource,
   challenge,
@@ -312,6 +313,21 @@ async function clearCandidateWarning(tx: Tx, caseId: string, reportId: string, r
   const stillActive = await tx.$count(reportWarning, and(eq(reportWarning.revisionId, report.currentRevisionId), eq(reportWarning.state, "ACTIVE")));
   if (!stillActive) await tx.update(researchReport).set({ reliability: "CLEAR", updatedAt: new Date(), rowVersion: report.rowVersion + 1 }).where(eq(researchReport.id, report.id));
   await record({ workspaceId: report.workspaceId, type: "report.warning_cleared", actor: { kind: "system", id: "case-engine" }, caseId, payload: { reportId, reason: "Every claim under review was verified as not relying on the affected figures" } });
+}
+
+/** A human asks the Financial Verifier for one more independent check of a proposal still waiting for a verdict. */
+export async function requestRecheck(ctx: ActorContext & { actorName: string }, input: { caseId: string; proposalId: string }) {
+  return commit(async (tx, record) => {
+    const caseRow = await lockCase(tx, ctx.workspaceId, input.caseId);
+    const [proposal] = await tx.select().from(replacementProposal).where(and(eq(replacementProposal.id, input.proposalId), eq(replacementProposal.workspaceId, ctx.workspaceId), eq(replacementProposal.caseId, caseRow.id)));
+    assert(proposal, "NOT_FOUND", "proposal not found");
+    assert(proposal.status === "PROPOSED", "CONFLICT", "only proposals still waiting for a check can be rechecked");
+    assert(proposal.epoch === caseRow.evidenceEpoch, "STALE_EVIDENCE", "this proposal belongs to an older evidence revision");
+    const running = await tx.$count(agentRun, and(eq(agentRun.workspaceId, ctx.workspaceId), eq(agentRun.status, "STARTED"), sql`${agentRun.taskKey} like ${`verify:${proposal.id}%`}`));
+    assert(!running, "CONFLICT", "a check of this proposal is already running");
+    await record({ workspaceId: ctx.workspaceId, type: "verification.recheck_requested", actor: ctx.actor, caseId: caseRow.id, evidenceEpoch: caseRow.evidenceEpoch, payload: { proposalId: proposal.id, claimId: proposal.claimId, actorName: ctx.actorName } });
+    return { proposalId: proposal.id };
+  });
 }
 
 export async function raiseChallenge(ctx: ActorContext, input: { caseId: string; targetKind: string; targetId: string; reasonCode: string; explanation: string; refs: string[] }) {

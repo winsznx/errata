@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { runtimeFor, SDK_VERSION } from "../agents/host.js";
 import { runtimeView } from "../api/views.js";
 import { ENV } from "../config/env.js";
@@ -10,6 +10,7 @@ import { agentRun, claim, claimImpact, correctionCase, domainEvent, replacementP
 import { advanceReplay } from "../domain/cases.js";
 import { scanNumericTokens } from "../domain/document.js";
 import { sameDecimal } from "../domain/locator.js";
+import { requestRecheck } from "../domain/claims-work.js";
 import { reissue, reviewCandidate } from "../domain/publication.js";
 import { loadScenario, loadScenarios } from "../domain/scenarios.js";
 import { createScenarioWorkspace } from "../domain/workspace.js";
@@ -22,6 +23,7 @@ Commands:
   verify-sources [--live]                 Re-hash every snapshot in datasets/provenance.json; with --live, re-fetch each from sec.gov and compare.
   scenarios                               List replay scenarios.
   resume --workspace <slug> [--approve]   Recreate a workspace's runtime from stored state and let pending work finish.
+         [--recheck]                      --recheck asks for another check of proposals whose automatic checks ended without a verdict.
   replay --scenario <id> [--approve]      Run a scenario end to end with live agents. --approve acts as a synthetic CLI editor
          [--timeout <seconds>]            to approve and reissue a ready draft. Prints the workspace slug for the web UI.
   evaluate --scenario <id> [--runs <n>]   Run the scenario n times with --approve, then score each run against
@@ -238,6 +240,19 @@ async function main(): Promise<void> {
     if (!ws) throw new Error("workspace not found");
     console.log(`resuming ${ws.slug}: recreating its Mozaik runtime from stored state`);
     await runtimeFor(ws.id);
+    if (process.argv.includes("--recheck")) {
+      const pending = await db
+        .select({ proposal: replacementProposal })
+        .from(replacementProposal)
+        .innerJoin(correctionCase, eq(correctionCase.id, replacementProposal.caseId))
+        .where(and(eq(replacementProposal.workspaceId, ws.id), eq(replacementProposal.status, "PROPOSED"), eq(replacementProposal.epoch, correctionCase.evidenceEpoch)));
+      for (const { proposal } of pending) {
+        const checks = await db.$count(agentRun, and(eq(agentRun.workspaceId, ws.id), eq(agentRun.status, "COMPLETED"), sql`${agentRun.taskKey} like ${`verify:${proposal.id}%`}`));
+        if (checks < 2) continue;
+        await requestRecheck({ workspaceId: ws.id, actor: { kind: "human", id: "editor:cli" }, actorName: "CLI editor (synthetic)" }, { caseId: proposal.caseId, proposalId: proposal.id });
+        console.log(`asked for another independent check of proposal ${proposal.id}`);
+      }
+    }
     const deadline = Date.now() + Number(arg("timeout") ?? 3600) * 1000;
     await waitQuiet(ws.id, deadline);
     const reissued = process.argv.includes("--approve") ? await approveReady(ws.id, deadline, (line) => console.log(line)) : 0;

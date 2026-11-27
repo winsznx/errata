@@ -46,6 +46,8 @@ export function describeEvent(event: DomainEventView): string {
       return `${role} rejected the proposal for ${str(p.claimLabel)}`;
     case "challenge.raised":
       return `${role} raised a challenge: ${str(p.reasonCode).toLowerCase().replace(/_/g, " ")}`;
+    case "verification.recheck_requested":
+      return `${str(p.actorName) || "Editor"} asked the Financial Verifier for another independent check`;
     case "challenge.resolved":
       return "Challenge resolved";
     case "report.revision_prepared":
