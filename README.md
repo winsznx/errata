@@ -72,12 +72,13 @@ pnpm errata inspect-run --workspace <slug>
 ### Tests
 
 ```bash
-pnpm --filter @errata/runtime test      # parsers, formulas, provider errors, context budget, filing hash
+pnpm lint                               # Biome
+pnpm --filter @errata/runtime test      # parsers, formulas, provider errors and retries, context budget, filing hash
 pnpm test:integration                   # the full correction loop through the domain guards, against Postgres
 pnpm test:e2e                           # Playwright: demo, evidence, approve and reissue, roles, isolation, phone layout
 ```
 
-CI runs all three, plus typechecks, both production builds and the snapshot check, on every push.
+CI runs lint, typechecks, all three test suites, both production builds and the snapshot check on every push.
 
 ## How it works
 
@@ -101,9 +102,9 @@ SEC filings (verified snapshots or live EDGAR)
 | `SemanticEvent` and `sendEvent` | `host.ts` | Every committed domain event (filing discovered, scope proposed, claim verified, challenge raised) enters the native bus. |
 | `SituationSpecification` and situation handlers | `host.ts` | Each agent's handler decides on its own whether an event needs work. There is no central A then B then C script. |
 | `runLoop` | `host.ts` | Each piece of work is its own native loop with a fresh context. Loops for different agents run at the same time. |
-| `InterceptionHandler` | `host.ts` | Stops a loop when its case moves to newer evidence, enforces the tool-call budget, and keeps each request under the provider's size limit. |
+| `InterceptionHandler` | `host.ts` | Stops a loop when its case moves to newer evidence, enforces the tool-call budget, keeps each request under the provider's size limit, and sends one reminder when a loop tries to finish without making the write its task exists for. |
 | `Tool` | `apps/runtime/src/agents/tools.ts` | Each task gets only the tools it needs. Every call is recorded with the evidence it touched. |
-| `OpenAIChatCompletions`, `supportedModels` | `apps/runtime/src/agents/model.ts` | Groq is registered as a native model entry. A wrapper around Mozaik's own runner adds concurrency limits, deadlines and rate-limit waits. |
+| `OpenAIChatCompletions`, `supportedModels`, `Endpoint` | `apps/runtime/src/agents/model.ts` | Groq is registered as a native model entry that uses the SDK's own Chat Completions mapper. Only the HTTP client is ours, so a stalled request is aborted after two minutes instead of the OpenAI default of ten. A wrapper around Mozaik's own runner adds concurrency limits, deadlines, rate-limit waits and retries. |
 | Mozaik Cloud | built into `runLoop` | Every loop streams to app.jigjoy.ai, and the session link is stored on the agent run. |
 
 **Checks between agents.**
@@ -111,6 +112,7 @@ SEC filings (verified snapshots or live EDGAR)
 - A scope proposal is confirmed only when a different agent cites the same periods from its own read of the notice.
 - A replacement is verified only when the verifier read the cited cell itself in its own loop, the cell re-reads to the same value from the stored bytes, and the identity, period, column and value all match.
 - Rejections open challenges, which send the work back to the proposer.
+- The verifier gets two automatic checks of each proposal. If both end without a verdict, the proposal stays unverified and blocks the draft. An editor can then ask for one more independent check, and that request is recorded with the editor's name.
 - A corrected draft is blocked until the verifier confirms that every rewritten conclusion is true on the corrected figures.
 - When the evidence revision advances, work started on the old one is stopped by interception and rejected at commit.
 
