@@ -75,9 +75,14 @@ pnpm errata verify-sources --live               # re-download each from sec.gov 
 pnpm errata replay --scenario nocera-q1-repair --approve
 pnpm errata evaluate --scenario nocera-q1-repair --runs 1
 pnpm errata inspect-run --workspace <slug>
+pnpm errata resume --workspace <slug> --approve [--recheck] [--retry-failed]
+pnpm errata export-workspace --workspace <slug> --out run.json
+pnpm errata import-workspace --file run.json --reference
 ```
 
 `replay --approve` runs live agents and then acts as a clearly labelled synthetic CLI editor to approve and reissue a ready draft. `evaluate` reads the manual ground truth in `datasets/evaluation` only after a run has finished, and writes its scores to `evaluation/results`.
+
+`resume` brings a workspace's runtime back from the database and lets pending work finish. `--recheck` asks for one more independent check of proposals whose two automatic checks ended without a verdict, and `--retry-failed` retries tasks whose attempts ran out, as an operator would with the Retry button. `export-workspace` and `import-workspace` copy one finished workspace to another database, matching filings, locators and facts by their natural keys. With `--reference` it becomes a read-only recorded run that anyone can open, which is how the hosted demo's recorded run was published.
 
 ### Tests
 
