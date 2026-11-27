@@ -182,7 +182,7 @@ export class WorkspaceRuntime {
       .update(agentRun)
       .set({ status: "FAILED", errorCode: "RUNTIME_RESTARTED", errorMessage: "The runtime restarted while this loop was running; a fresh attempt replaces it", endedAt: new Date() })
       .where(and(eq(agentRun.workspaceId, this.workspaceId), eq(agentRun.status, "STARTED")))
-      .returning({ id: agentRun.id, attempt: agentRun.attempt });
+      .returning({ id: agentRun.id, taskKey: agentRun.taskKey });
 
     this.unsubscribe = eventBus.onCommitted((event) => {
       if (event.workspaceId !== this.workspaceId) return;
@@ -193,7 +193,10 @@ export class WorkspaceRuntime {
       await record({ workspaceId: this.workspaceId, type: "runtime.started", actor: { kind: "system", id: "runtime" }, payload: { runtimeSessionId: this.sessionId, sdkVersion: SDK_VERSION, model: ENV.MODEL_ID, participants: [...this.agents.keys(), "errata-host", "human-editor"] } });
     });
     this.rt.sendEvent(SemanticEvent.create("runtime.reconcile", this.host.getId(), { reason: "runtime started" }), this.host.getId());
-    for (const run of interrupted) if (run.attempt < MAX_RESTART_ATTEMPTS) await this.retry(run.id);
+    for (const run of interrupted) {
+      const restarts = await db.$count(agentRun, and(eq(agentRun.workspaceId, this.workspaceId), eq(agentRun.taskKey, run.taskKey), eq(agentRun.errorCode, "RUNTIME_RESTARTED")));
+      if (restarts <= MAX_RESTARTS_PER_TASK) await this.retry(run.id);
+    }
   }
 
   stop(): void {
@@ -583,8 +586,11 @@ async function planTasks(workspaceId: string, role: AgentRole, type: string, pay
 
 const runtimes = new Map<string, Promise<WorkspaceRuntime>>();
 
-/** A loop interrupted by a restart is relaunched as its next attempt, up to this attempt number, so a loop that keeps crashing the process cannot restart forever. */
-const MAX_RESTART_ATTEMPTS = 3;
+/**
+ * A loop interrupted by a restart is relaunched as its next attempt. Only restarts count toward this cap, since a
+ * restart is not the loop's failure, and the cap stops a loop that keeps crashing the process from restarting forever.
+ */
+const MAX_RESTARTS_PER_TASK = 3;
 
 /** Brings back the runtime of every unexpired workspace that had a loop running when the process stopped. */
 export async function resumeInterruptedWorkspaces(): Promise<number> {
