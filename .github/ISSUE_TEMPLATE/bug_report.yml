@@ -1,0 +1,32 @@
+name: Bug report
+description: Something in Errata does not work as described
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: The scenario or workspace, the steps, and any command you ran.
+      placeholder: |
+        1. pnpm errata replay --scenario nocera-q1-repair
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: Build
+      description: The commit, or the build shown by /api/v1/health on the hosted demo.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or trace
+      description: Relevant output, or the run trace exported from the Agent runtime page. Remove any API keys first.
+      render: text

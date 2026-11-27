@@ -1,6 +1,7 @@
 {
   "name": "@errata/runtime",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/main.ts",

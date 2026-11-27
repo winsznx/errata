@@ -1,5 +1,27 @@
 {
   "name": "errata",
+  "version": "0.1.0",
+  "description": "Correction desk for financial research: four concurrent Mozaik agents warn readers and draft verified corrections when SEC filings are restated.",
+  "license": "MIT",
+  "homepage": "https://errata-smoky.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/winsznx/errata.git"
+  },
+  "bugs": {
+    "url": "https://github.com/winsznx/errata/issues"
+  },
+  "keywords": [
+    "financial-research",
+    "sec-edgar",
+    "restatement",
+    "non-reliance",
+    "multi-agent",
+    "mozaik",
+    "ai-agents",
+    "fintech",
+    "xbrl"
+  ],
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.16.1",
