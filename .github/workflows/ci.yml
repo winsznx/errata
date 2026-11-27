@@ -56,7 +56,7 @@ jobs:
         run: |
           pnpm exec playwright install --with-deps chromium
           pnpm test:e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-traces
@@ -97,7 +97,7 @@ jobs:
       - run: pnpm --filter @errata/runtime migrate
       - name: Live Nocera correction with real agents
         run: pnpm errata evaluate --scenario nocera-q1-repair --runs 1 --timeout 3000
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: evaluation-results
           path: evaluation/results/
