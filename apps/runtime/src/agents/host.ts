@@ -380,6 +380,12 @@ export class WorkspaceRuntime {
             .where(eq(agentRun.id, runId))
             .catch((error: unknown) => console.error("[runtime] token usage update failed", error)),
         onFailure: (error) => void this.failRun(runId, error),
+        onWaiting: () =>
+          void db
+            .update(agentRun)
+            .set({ heartbeatAt: new Date() })
+            .where(and(eq(agentRun.id, runId), eq(agentRun.status, "STARTED")))
+            .catch((error: unknown) => console.error("[runtime] heartbeat update failed", error)),
         forcedTimeout: () => {
           if (!forceTimeout || this.fault.verifierTimeoutConsumed) return false;
           this.fault.verifierTimeoutConsumed = true;
