@@ -24,6 +24,10 @@ The repository also replays two more real restatements. The Joint Corp. restated
 
 ## Try it
 
+To see a finished correction without waiting for the agents, open https://errata-smoky.vercel.app/demo and choose **Open the recorded run**. It is the live Nocera run described under Results, kept read only, with every loop linked to its Mozaik Cloud session.
+
+To run the agents yourself:
+
 1. Open https://errata-smoky.vercel.app/demo and start the Nocera workspace. It is private to your browser and expires after a day.
 2. Open the Nocera note and select a figure. The panel re-reads the cited cell from the stored filing and links to sec.gov.
 3. Press **Play next disclosure** to release the 8-K on the replay clock. The Filing Monitor proposes which periods are affected. The Financial Verifier reads the notice itself and confirms them. The note then gets a warning on its public page while the Joint Corp. note stays clear. The roundup that only mentions Nocera goes under review until the agents establish that it cites no figures.
@@ -31,6 +35,12 @@ The repository also replays two more real restatements. The Joint Corp. restated
 5. Open **Review correction**, approve the exact draft, then reissue. Version 1 stays readable with its warning, version 2 becomes current, a correction notice is published, and the synthetic recipients get it in a simulated inbox. Exports are available as PDF, DOCX and Markdown.
 
 The **Agent runtime** page shows every Mozaik loop on a shared time axis, the overlap between loops, challenges, stale results that were rejected, and a link to each loop's live session in Mozaik Cloud.
+
+![The resolved Nocera case: each agent's last loop, the scope the verifier confirmed, and the timeline](docs/screenshots/case.png)
+
+![Agent runtime: 32 Mozaik loops on one time axis, with overlap, challenges and failures counted from the loops themselves](docs/screenshots/runtime.png)
+
+![The reissued public note, version 2, with its correction banner and the as-restated sources](docs/screenshots/public-note.png)
 
 Other scenarios on the demo page replay the same filings with labelled fault injection. In one, new evidence lands while agents are working. In another, a bad proposal arrives and a check times out. The Joint Corp. and Xencor cases also have their own scenarios.
 
