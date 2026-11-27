@@ -47,7 +47,16 @@ export interface NoticeChange {
   sources: { accession: string; form: string; url: string; column: string }[];
 }
 
+interface ConclusionReview {
+  verdict: "consistent" | "inconsistent";
+  explanation: string;
+  reviewer: string;
+  epoch: number;
+  at: string;
+}
+
 interface CandidateMeta {
+  conclusionReview?: ConclusionReview;
   notice: PatchInput["notice"];
   changes: NoticeChange[];
   blockers: string[];
@@ -118,6 +127,10 @@ export async function evaluateCandidate(tx: DbOrTx, candidateId: string): Promis
       if (!(RESOLVED_STATES as readonly string[]).includes(impact.state)) blockers.push(`"${affected.label}" is ${impact.state.toLowerCase().replace(/_/g, " ")}`);
       else if (impact.state === "VERIFIED_REPLACEMENT" && !meta.patchedBlockIds?.includes(affected.blockId)) blockers.push(`"${affected.label}" still shows the original figure`);
     }
+  }
+  if (meta.rewrittenQualitative?.length) {
+    if (!meta.conclusionReview) blockers.push("The rewritten conclusion has not yet been checked against the corrected figures");
+    else if (meta.conclusionReview.verdict !== "consistent") blockers.push(`The Financial Verifier found the rewritten conclusion inconsistent with the corrected figures: ${meta.conclusionReview.explanation}`);
   }
   const claims = await tx.query.claim.findMany({ where: eq(claim.revisionId, candidateId) });
   const tokens = scanNumericTokens(candidate.blocks);
@@ -298,6 +311,36 @@ export async function proposeRevisionPatch(ctx: ActorContext, input: PatchInput)
     });
     await recomputeCaseStatus(tx, caseRow.id, record);
     return { candidateId: candidate!.id, state, blockers };
+  });
+}
+
+/** A second participant reads the rewritten conclusions against the verified figures. An inconsistent verdict blocks the draft and challenges the editor. */
+export async function reviewConclusions(ctx: ActorContext, input: { candidateId: string; verdict: "consistent" | "inconsistent"; explanation: string }) {
+  return commit(async (tx, record) => {
+    const [candidate] = await tx.select().from(researchRevision).where(and(eq(researchRevision.id, input.candidateId), eq(researchRevision.workspaceId, ctx.workspaceId))).for("update");
+    assert(candidate && candidate.kind === "candidate" && candidate.caseId, "NOT_FOUND", "draft not found");
+    assert(candidate.candidateState === "READY" || candidate.candidateState === "BLOCKED" || candidate.candidateState === "CHECKING", "CONFLICT", `draft is ${candidate.candidateState}`);
+    assert(candidate.createdBy !== ctx.actor.id, "SELF_VERIFICATION", "the author of a draft cannot review its conclusions");
+    const caseRow = await lockCase(tx, ctx.workspaceId, candidate.caseId);
+    guardEpoch(ctx, caseRow.evidenceEpoch);
+    const meta = candidate.noticeDraft as unknown as CandidateMeta;
+    const review: ConclusionReview = { verdict: input.verdict, explanation: input.explanation.slice(0, 1200), reviewer: ctx.actor.id, epoch: caseRow.evidenceEpoch, at: new Date().toISOString() };
+    const nextMeta = { ...meta, conclusionReview: review };
+    await tx.update(researchRevision).set({ noticeDraft: nextMeta as unknown as Record<string, unknown> }).where(eq(researchRevision.id, candidate.id));
+    const { blockers } = await evaluateCandidate(tx, candidate.id);
+    await tx.update(researchRevision).set({ candidateState: blockers.length ? "BLOCKED" : "READY", noticeDraft: { ...nextMeta, blockers } as unknown as Record<string, unknown> }).where(eq(researchRevision.id, candidate.id));
+    if (input.verdict === "inconsistent") {
+      const [raised] = await tx
+        .insert(challenge)
+        .values({ workspaceId: ctx.workspaceId, caseId: caseRow.id, targetKind: "candidate_conclusion", targetId: candidate.id, epoch: caseRow.evidenceEpoch, raisedBy: ctx.actor.id, reasonCode: "CONCLUSION_INCONSISTENT", explanation: review.explanation, refs: [candidate.id], status: "OPEN" })
+        .returning();
+      await record({ workspaceId: ctx.workspaceId, type: "challenge.raised", actor: ctx.actor, caseId: caseRow.id, evidenceEpoch: caseRow.evidenceEpoch, payload: { challengeId: raised!.id, targetKind: "candidate_conclusion", targetId: candidate.id, reportId: candidate.reportId, reasonCode: "CONCLUSION_INCONSISTENT", explanation: review.explanation.slice(0, 500) } });
+    } else {
+      await tx.update(challenge).set({ status: "RESOLVED", resolution: `Conclusions in draft ${candidate.id} checked as consistent`, resolvedAt: new Date() }).where(and(eq(challenge.caseId, caseRow.id), eq(challenge.targetKind, "candidate_conclusion"), eq(challenge.status, "OPEN")));
+    }
+    await record({ workspaceId: ctx.workspaceId, type: "report.conclusions_reviewed", actor: ctx.actor, caseId: caseRow.id, evidenceEpoch: caseRow.evidenceEpoch, payload: { candidateId: candidate.id, reportId: candidate.reportId, verdict: input.verdict, explanation: review.explanation.slice(0, 400), agentRunId: ctx.agentRunId ?? null } });
+    await recomputeCaseStatus(tx, caseRow.id, record);
+    return { verdict: input.verdict, blockers };
   });
 }
 

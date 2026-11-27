@@ -7,7 +7,7 @@ import { checkDisclosureScope, linkAmendment, proposeDisclosureScope, type Actor
 import { findFactCandidates, proposeReplacement, raiseChallenge, submitVerification, verifiedInputs } from "../domain/claims-work.js";
 import { DomainError } from "../domain/errors.js";
 import { commit } from "../domain/events.js";
-import { proposeRevisionPatch } from "../domain/publication.js";
+import { proposeRevisionPatch, reviewConclusions } from "../domain/publication.js";
 import { caseSummary, listEligibleFilings, openCasesForIssuer, proposalForVerifier, readExcerpt, reportForEditing, sourceSections } from "../domain/reads.js";
 import type { ScenarioFault } from "../domain/scenarios.js";
 import { proposeWarningText } from "../domain/warnings.js";
@@ -181,10 +181,15 @@ export function buildTools(ctx: ToolContext): Tool[] {
     }),
     list_source_sections: defineTool(ctx, {
       name: "list_source_sections",
-      description: "List a filing's navigable sections: Item paragraphs with locator ids for 8-Ks, statement tables with row labels and locator ids for periodic reports. No values are returned.",
-      schema: z.object({ sourceId: ID }),
-      jsonSchema: idSchema("sourceId", "Source document id"),
-      run: ({ sourceId }) => sourceSections(ctx.workspaceId, sourceId),
+      description: "List a filing's navigable sections without values: Item paragraphs for 8-Ks; for periodic reports, statement table rows with one locator per cell labelled by column (as_reported, adjustment, as_restated, ordinary) and period. Filter by period ends and a row label to keep the result short.",
+      schema: z.object({ sourceId: ID, periodEnds: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(6), rowLabel: z.string().max(80).nullable() }),
+      jsonSchema: {
+        type: "object",
+        properties: { sourceId: { type: "string" }, periodEnds: { type: "array", items: { type: "string" }, description: "YYYY-MM-DD period ends to include; empty for all" }, rowLabel: { type: ["string", "null"], description: "Case-insensitive text the row label must contain, e.g. total current assets" } },
+        required: ["sourceId", "periodEnds", "rowLabel"],
+        additionalProperties: false,
+      },
+      run: ({ sourceId, periodEnds, rowLabel }) => sourceSections(ctx.workspaceId, sourceId, { periodEnds, rowQuery: rowLabel ?? undefined }),
     }),
     read_source_excerpt: defineTool(ctx, {
       name: "read_source_excerpt",
@@ -427,11 +432,35 @@ export function buildTools(ctx: ToolContext): Tool[] {
     }),
   });
 
+  Object.assign(tools, {
+    get_draft_for_review: defineTool(ctx, {
+      name: "get_draft_for_review",
+      description: "Read a correction draft for review: each rewritten block, and every affected figure with its previous and verified values.",
+      schema: z.object({ candidateId: ID }),
+      jsonSchema: idSchema("candidateId", "Draft (candidate revision) id"),
+      run: async ({ candidateId }) => {
+        const candidate = await db.query.researchRevision.findFirst({ where: and(eq(researchRevision.id, candidateId), eq(researchRevision.workspaceId, ctx.workspaceId)) });
+        if (!candidate || candidate.kind !== "candidate") throw new DomainError("NOT_FOUND", "draft not found");
+        const meta = (candidate.noticeDraft ?? {}) as { changes?: { label: string; previous: string; replacement: string; delta: string }[]; patchedBlockIds?: string[]; notice?: Record<string, string> };
+        const rewritten = candidate.blocks.filter((b) => (meta.patchedBlockIds ?? []).some((id) => b.id.startsWith(id)));
+        return { candidateId, state: candidate.candidateState, figures: meta.changes ?? [], rewrittenBlocks: rewritten.map((b) => ({ blockId: b.id, kind: b.kind, text: b.text })), notice: meta.notice ?? null };
+      },
+    }),
+    review_draft_conclusions: defineTool(ctx, {
+      name: "review_draft_conclusions",
+      description: "Record whether every conclusion and the notice text in a correction draft is true on the verified figures. Use inconsistent if any sentence contradicts them, and say which sentence and why.",
+      schema: z.object({ candidateId: ID, verdict: z.enum(["consistent", "inconsistent"]), explanation: z.string().min(10).max(1200) }),
+      jsonSchema: { type: "object", properties: { candidateId: { type: "string" }, verdict: { type: "string", enum: ["consistent", "inconsistent"] }, explanation: { type: "string" } }, required: ["candidateId", "verdict", "explanation"], additionalProperties: false },
+      write: true,
+      run: async (args) => (await reviewConclusions(actor(ctx), args)).result,
+    }),
+  });
+
   const byRole: Record<AgentRole, string[]> = {
     "filing-monitor": ["list_eligible_filings", "list_source_sections", "read_source_excerpt", "list_open_cases", "get_case", "propose_disclosure_scope", "propose_amendment_link", "record_task_outcome"],
     "impact-analyst": ["get_case", "find_fact_candidates", "read_source_excerpt", "propose_replacement", "raise_challenge", "get_draft", "search_facts", "propose_claim", "record_task_outcome"],
-    "financial-verifier": ["get_case", "get_proposal", "list_source_sections", "read_source_excerpt", "check_disclosure_scope", "compute_formula", "submit_verification", "raise_challenge", "get_draft", "confirm_binding", "record_task_outcome"],
-    "publication-editor": ["get_case", "get_report_for_editing", "propose_warning_text", "propose_revision_patch", "record_task_outcome"],
+    "financial-verifier": ["get_case", "get_proposal", "list_source_sections", "read_source_excerpt", "check_disclosure_scope", "compute_formula", "submit_verification", "raise_challenge", "get_draft", "confirm_binding", "get_draft_for_review", "review_draft_conclusions", "record_task_outcome"],
+    "publication-editor": ["get_case", "get_report_for_editing", "get_draft_for_review", "propose_warning_text", "propose_revision_patch", "record_task_outcome"],
   };
   return byRole[ctx.role].map((name) => tools[name]!);
 }

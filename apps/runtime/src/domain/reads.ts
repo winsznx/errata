@@ -79,33 +79,35 @@ export async function listEligibleFilings(workspaceId: string, cik?: string) {
     .map((s) => ({ sourceId: s.id, cik: s.cik, accession: s.accession, form: s.form, filedDate: s.filedDate, reportDate: s.reportDate, availableAt: s.availableAt.toISOString(), url: s.url }));
 }
 
-/** Lists navigable sections without values: Item paragraphs for 8-Ks, statement tables with row labels for periodic reports. */
-export async function sourceSections(workspaceId: string, sourceId: string) {
+/** Lists navigable sections without values: Item paragraphs for 8-Ks, statement table rows with one labelled locator per column for periodic reports. */
+export async function sourceSections(workspaceId: string, sourceId: string, options: { periodEnds?: string[]; rowQuery?: string } = {}) {
   const source = await eligibleSource(db, workspaceId, sourceId);
   const textLocators = await db.select().from(sourceLocator).where(and(eq(sourceLocator.sourceId, source.id), eq(sourceLocator.kind, "text"))).orderBy(sql`(${sourceLocator.path}->>'paragraphIndex')::int`);
-  const tableRows = await db
-    .selectDistinctOn([sourceLocator.id], { locator: sourceLocator, column: financialFact.sourceColumn, periodEnd: financialFact.periodEnd })
+  const cells = await db
+    .select({ locator: sourceLocator, column: financialFact.sourceColumn, periodEnd: financialFact.periodEnd, concept: financialFact.conceptId })
     .from(sourceLocator)
     .innerJoin(financialFact, eq(financialFact.locatorId, sourceLocator.id))
-    .where(and(eq(sourceLocator.sourceId, source.id), eq(sourceLocator.kind, "html_table")));
-  const tables = new Map<number, { tableIndex: number; periodEnds: Set<string>; columns: Set<string>; rows: { label: string; locatorIds: string[] }[] }>();
-  for (const { locator, column, periodEnd } of tableRows) {
-    const path = locator.path as { tableIndex: number; label: string };
-    const table = tables.get(path.tableIndex) ?? { tableIndex: path.tableIndex, periodEnds: new Set(), columns: new Set(), rows: [] };
+    .where(and(eq(sourceLocator.sourceId, source.id), eq(sourceLocator.kind, "html_table"), options.periodEnds?.length ? inArray(financialFact.periodEnd, options.periodEnds) : sql`true`));
+  const query = options.rowQuery?.toLowerCase();
+  type Cell = { column: string; header: string; periodEnd: string; locatorId: string };
+  type Row = { label: string; concept: string; cells: Cell[] };
+  const tables = new Map<number, { tableIndex: number; periodEnds: Set<string>; rows: Map<string, Row> }>();
+  for (const { locator, column, periodEnd, concept } of cells) {
+    const path = locator.path as { tableIndex: number; label: string; rowIndex: number; headerPath?: string[] };
+    if (query && !path.label.toLowerCase().includes(query)) continue;
+    const table = tables.get(path.tableIndex) ?? { tableIndex: path.tableIndex, periodEnds: new Set<string>(), rows: new Map<string, Row>() };
     table.periodEnds.add(periodEnd);
-    table.columns.add(column);
-    const row = table.rows.find((r) => r.label === path.label);
-    if (row) row.locatorIds.push(locator.id);
-    else table.rows.push({ label: path.label, locatorIds: [locator.id] });
+    const rowKey = `${path.rowIndex}`;
+    const row: Row = table.rows.get(rowKey) ?? { label: path.label, concept, cells: [] };
+    if (!row.cells.some((c) => c.locatorId === locator.id)) row.cells.push({ column, header: (path.headerPath ?? []).join(" / "), periodEnd, locatorId: locator.id });
+    table.rows.set(rowKey, row);
     tables.set(path.tableIndex, table);
   }
   return {
     source: { sourceId: source.id, accession: source.accession, form: source.form, filedDate: source.filedDate, cik: source.cik },
-    textSections: textLocators.map((l) => ({ locatorId: l.id, item: (l.path as { item: string }).item, preview: l.excerpt.slice(0, 200) })),
-    tables: [...tables.values()]
-      .filter((t) => t.columns.has("as_restated") || t.columns.has("as_reported") || source.form.startsWith("10-Q"))
-      .slice(0, 12)
-      .map((t) => ({ tableIndex: t.tableIndex, periodEnds: [...t.periodEnds].sort(), columns: [...t.columns], rows: t.rows.slice(0, 40) })),
+    textSections: source.form.startsWith("8-K") ? textLocators.map((l) => ({ locatorId: l.id, item: (l.path as { item: string }).item, preview: l.excerpt.slice(0, 200) })) : [],
+    tables: [...tables.values()].slice(0, 6).map((t) => ({ tableIndex: t.tableIndex, periodEnds: [...t.periodEnds].sort(), rows: [...t.rows.values()].slice(0, 30) })),
+    note: "Each table cell has its own locator. Cite the locator of the cell you read, for example the as_restated column for a corrected figure.",
   };
 }
 
@@ -121,8 +123,10 @@ export async function readExcerpt(workspaceId: string, locatorId: string) {
     const path = locator.path as { tableIndex: number; rowIndex: number };
     const table = tableAt(await getBlob(source.storageRef), path.tableIndex);
     const row = table?.rows.find((r) => r.rowIndex === path.rowIndex);
+    const cited = (locator.path as { columnKey?: string; headerPath?: string[] }).headerPath?.join(" / ") ?? null;
     return {
       ...base,
+      citedColumn: cited,
       tableContext: table?.context.slice(-300) ?? null,
       scaleNote: table?.scale ? `values in the table are stated in units of 10^${table.scale}` : "values are stated in whole units",
       rowLabel: row?.label ?? null,
@@ -170,9 +174,10 @@ export async function reportForEditing(workspaceId: string, reportId: string) {
   const impacts = claims.length ? await db.select().from(claimImpact).where(inArray(claimImpact.claimId, claims.map((c) => c.id))) : [];
   const warnings = await db.select().from(reportWarning).where(and(eq(reportWarning.revisionId, revision.id), eq(reportWarning.state, "ACTIVE")));
   const verified = impacts.length
-    ? await db.select({ claimId: replacementProposal.claimId }).from(replacementProposal).innerJoin(correctionCase, eq(correctionCase.id, replacementProposal.caseId)).where(and(inArray(replacementProposal.claimId, claims.map((c) => c.id)), eq(replacementProposal.status, "VERIFIED"), eq(replacementProposal.epoch, correctionCase.evidenceEpoch)))
+    ? await db.select({ claimId: replacementProposal.claimId, value: replacementProposal.value }).from(replacementProposal).innerJoin(correctionCase, eq(correctionCase.id, replacementProposal.caseId)).where(and(inArray(replacementProposal.claimId, claims.map((c) => c.id)), eq(replacementProposal.status, "VERIFIED"), eq(replacementProposal.epoch, correctionCase.evidenceEpoch)))
     : [];
   const verifiedIds = new Set(verified.map((v) => v.claimId));
+  const verifiedValues = new Map(verified.map((v) => [v.claimId, v.value]));
   return {
     reportId: report.id,
     title: report.title,
@@ -187,7 +192,19 @@ export async function reportForEditing(workspaceId: string, reportId: string) {
         .filter((c) => c.blockId === b.id)
         .map((c) => {
           const impact = impacts.find((i) => i.claimId === c.id);
-          return { claimId: c.id, label: c.label, category: c.category, text: c.text, material: c.material, impactState: impact?.state ?? "UNAFFECTED", verifiedReplacementAvailable: verifiedIds.has(c.id) };
+          const replacement = verifiedValues.get(c.id) ?? null;
+          return {
+            claimId: c.id,
+            label: c.label,
+            category: c.category,
+            text: c.text,
+            material: c.material,
+            impactState: impact?.state ?? "UNAFFECTED",
+            verifiedReplacementAvailable: verifiedIds.has(c.id),
+            previousValue: c.valueDecimal,
+            verifiedValue: replacement,
+            signChange: c.valueDecimal && replacement ? (Number(c.valueDecimal) >= 0) !== (Number(replacement) >= 0) : null,
+          };
         }),
     })),
   };

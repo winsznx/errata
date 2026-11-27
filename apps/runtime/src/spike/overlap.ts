@@ -31,7 +31,7 @@ class OnType extends SituationSpecification {
   }
 }
 
-const model = process.env.SPIKE_MODEL ?? "claude-haiku-4-5";
+const model = process.env.SPIKE_MODEL ?? process.env.MODEL_ID ?? "gpt-5.4";
 
 function freshContext(agent: Agent): ModelContext {
   return ModelContext.rehydrate({

@@ -96,7 +96,12 @@ export class GuardedInferenceRunner implements InferenceRunner {
           timer = setTimeout(() => reject(new ModelCallError(`model call exceeded ${ENV.MODEL_CALL_TIMEOUT_MS} ms`, "TIMEOUT")), ENV.MODEL_CALL_TIMEOUT_MS);
         }),
       ]);
-      if (output.tokenUsage) call.onUsage(output.tokenUsage.inputTokens, output.tokenUsage.outputTokens);
+      const usage = output.tokenUsage ?? (output.rowResponse as { usage?: { input_tokens?: number; output_tokens?: number; prompt_tokens?: number; completion_tokens?: number } } | undefined)?.usage;
+      if (usage) {
+        const inputTokens = "inputTokens" in usage ? usage.inputTokens : (usage.input_tokens ?? usage.prompt_tokens ?? 0);
+        const outputTokens = "outputTokens" in usage ? usage.outputTokens : (usage.output_tokens ?? usage.completion_tokens ?? 0);
+        call.onUsage(Number(inputTokens) || 0, Number(outputTokens) || 0);
+      }
       const firstCall = output.items.findIndex((item) => item.getType() === "function_call");
       const items = firstCall < 0 ? output.items : output.items.filter((item, index) => item.getType() !== "function_call" || index === firstCall);
       return { ...output, items };

@@ -83,7 +83,7 @@ interface Task {
 
 const TRIGGERS: Record<AgentRole, string[]> = {
   "filing-monitor": ["filing.discovered", "filing.non_reliance_detected", "challenge.raised", "runtime.reconcile"],
-  "financial-verifier": ["filing.scope_proposed", "claim.replacement_proposed", "report.binding_check_requested", "runtime.reconcile"],
+  "financial-verifier": ["filing.scope_proposed", "claim.replacement_proposed", "report.binding_check_requested", "report.revision_prepared", "runtime.reconcile"],
   "impact-analyst": ["report.extraction_requested", "filing.non_reliance_detected", "evidence.superseded", "claim.verified", "claim.rejected", "challenge.raised", "runtime.reconcile"],
   "publication-editor": ["report.warning_applied", "claim.verified", "case.status_changed", "report.changes_requested", "runtime.reconcile"],
 };
@@ -295,6 +295,11 @@ export class WorkspaceRuntime {
       const prior = await db.select({ id: agentRun.id, status: agentRun.status, attempt: agentRun.attempt }).from(agentRun).where(and(eq(agentRun.workspaceId, this.workspaceId), eq(agentRun.role, role), eq(agentRun.taskKey, task.key)));
       if (attempt === 1 && prior.length) return null;
       if (prior.some((p) => p.status === "STARTED") || prior.some((p) => p.attempt >= attempt)) return null;
+      if (task.kind !== "verify_replacement" && task.kind !== "retry") {
+        const sameWork = [...this.state.activeRuns.values()].some((r) => r.role === role && r.task === task.kind && r.caseId === task.caseId);
+        if (sameWork) return null;
+      }
+      if (task.kind === "verify_replacement" && [...this.state.activeRuns.values()].filter((r) => r.role === role).length >= 4) return null;
       const agent = this.agents.get(role)!;
       const now = new Date();
       const [run] = await db
@@ -309,7 +314,12 @@ export class WorkspaceRuntime {
         workspaceId: this.workspaceId,
         agentRunId: runId,
         role,
-        onUsage: (input, output) => void db.update(agentRun).set({ inputTokens: sql`coalesce(${agentRun.inputTokens}, 0) + ${input}`, outputTokens: sql`coalesce(${agentRun.outputTokens}, 0) + ${output}`, heartbeatAt: new Date() }).where(eq(agentRun.id, runId)),
+        onUsage: (input, output) =>
+          void db
+            .update(agentRun)
+            .set({ inputTokens: sql`coalesce(${agentRun.inputTokens}, 0) + ${Math.trunc(input)}::int`, outputTokens: sql`coalesce(${agentRun.outputTokens}, 0) + ${Math.trunc(output)}::int`, heartbeatAt: new Date() })
+            .where(eq(agentRun.id, runId))
+            .catch((error: unknown) => console.error("[runtime] token usage update failed", error)),
         onFailure: (error) => void this.failRun(runId, error),
         forcedTimeout: () => {
           if (!forceTimeout || this.fault.verifierTimeoutConsumed) return false;
@@ -415,7 +425,18 @@ async function planTasks(workspaceId: string, role: AgentRole, type: string, pay
       .where(and(eq(replacementProposal.workspaceId, workspaceId), eq(replacementProposal.status, "PROPOSED"), eq(replacementProposal.epoch, correctionCase.evidenceEpoch)));
     for (const { proposal } of pendingProposals) {
       if (proposal.proposerAgent === "financial-verifier") continue;
-      tasks.push({ kind: "verify_replacement", key: `verify:${proposal.id}`, caseId: proposal.caseId, epoch: proposal.epoch, trigger: type, message: `Verify proposal ${proposal.id} (kind ${proposal.kind}) from ${proposal.proposerAgent}. Use get_proposal to see the claim and its identity. ${proposal.kind === "formula" ? "Recompute it with compute_formula and submit the result." : proposal.kind === "unaffected" ? "Read the claim and confirm it contains no figures and relies on none." : "Find the matching row in the amendment's restatement table yourself (list_source_sections on the amendment source, then read_source_excerpt), read the as-restated value, convert it to base units using the table's scale, and submit it with the locator you read."}` });
+      const checks = await db.$count(agentRun, and(eq(agentRun.workspaceId, workspaceId), eq(agentRun.taskKey, `verify:${proposal.id}`)));
+      if (checks >= 2) continue;
+      tasks.push({ kind: "verify_replacement", key: `verify:${proposal.id}`, caseId: proposal.caseId, epoch: proposal.epoch, trigger: type, message: `Verify proposal ${proposal.id} (kind ${proposal.kind}) from ${proposal.proposerAgent}. Use get_proposal to see the claim and its identity. ${proposal.kind === "formula" ? "Recompute it with compute_formula and submit the result." : proposal.kind === "unaffected" ? "Read the claim and confirm it contains no figures and relies on none." : "Find the matching row in the amendment's restatement table yourself: call list_source_sections on the amendment source with the claim's period end and a short row label, pick the cell whose column is as_restated, read it with read_source_excerpt, convert the printed value to base units using the scale note, and submit that value with that same as_restated locator id."}` });
+    }
+  }
+
+  if (role === "financial-verifier") {
+    const drafts = await db.select().from(researchRevision).where(and(eq(researchRevision.workspaceId, workspaceId), eq(researchRevision.kind, "candidate"), inArray(researchRevision.candidateState, ["READY", "BLOCKED", "CHECKING"])));
+    for (const draft of drafts) {
+      const meta = (draft.noticeDraft ?? {}) as { rewrittenQualitative?: string[]; conclusionReview?: unknown };
+      if (!meta.rewrittenQualitative?.length || meta.conclusionReview || !draft.caseId) continue;
+      tasks.push({ kind: "review_conclusions", key: `conclusions:${draft.id}`, caseId: draft.caseId, epoch: await caseEpoch(draft.caseId), trigger: type, message: `The Publication Editor drafted correction ${draft.id}. Read it with get_draft_for_review. Check every rewritten sentence and the notice text against the verified figures: signs, which side is larger, and any statement about coverage or financing need. Then call review_draft_conclusions. Say inconsistent if any sentence contradicts the figures, quoting it.` });
     }
   }
 
@@ -437,10 +458,11 @@ async function planTasks(workspaceId: string, role: AgentRole, type: string, pay
         : [];
       const work = [...candidates, ...direct, ...derivedReady];
       if (!work.length) continue;
-      const ids = work.map((w) => w.claim.id).sort();
+      const rounds = await db.$count(agentRun, and(eq(agentRun.workspaceId, workspaceId), eq(agentRun.role, "impact-analyst"), eq(agentRun.caseId, caseRow.id), eq(agentRun.epoch, caseRow.evidenceEpoch), sql`${agentRun.taskKey} like 'replace:%'`));
+      if (rounds >= 3) continue;
       tasks.push({
         kind: "propose_replacements",
-        key: `replace:${caseRow.id}:${caseRow.evidenceEpoch}:${ids.join(",").slice(0, 400)}:${proposals.filter((p) => p.status === "REJECTED").length}`,
+        key: `replace:${caseRow.id}:${caseRow.evidenceEpoch}:round${rounds + 1}`,
         caseId: caseRow.id,
         epoch: caseRow.evidenceEpoch,
         trigger: type,
@@ -452,6 +474,9 @@ async function planTasks(workspaceId: string, role: AgentRole, type: string, pay
   if (role === "publication-editor") {
     if (type === "report.warning_applied" && payload.warningType === "NON_RELIANCE" && caseId) {
       tasks.push({ kind: "write_warning", key: `warning:${String(payload.reportId)}:${caseId}`, caseId, epoch: await caseEpoch(caseId), trigger: type, message: `A non-reliance warning was applied to report ${String(payload.reportId)} (case ${caseId}). Read the case with get_case and write a short reader-facing explanation with propose_warning_text: what the issuer disclosed, that corrected figures are not yet available if no amendment is linked, and that the original text stays visible. No figures.` });
+    }
+    if (type === "challenge.raised" && payload.targetKind === "candidate_conclusion") {
+      tasks.push({ kind: "revise_draft", key: `revise-conclusion:${String(payload.challengeId)}`, caseId, epoch: caseId ? await caseEpoch(caseId) : null, trigger: type, message: `The Financial Verifier found the conclusions in your draft ${String(payload.targetId)} for report ${String(payload.reportId)} inconsistent with the verified figures: "${String(payload.explanation)}". Read the figures with get_draft_for_review and the note with get_report_for_editing, then submit a corrected propose_revision_patch whose conclusions follow from the verified values.` });
     }
     if (type === "report.changes_requested") {
       tasks.push({ kind: "revise_draft", key: `revise:${String(payload.reviewId)}`, caseId, epoch: caseId ? await caseEpoch(caseId) : null, trigger: type, message: `A human editor requested changes to draft ${String(payload.candidateId)} for report ${String(payload.reportId)}: "${String(payload.notes ?? "")}". Read the report with get_report_for_editing and submit a revised propose_revision_patch that addresses the notes.` });

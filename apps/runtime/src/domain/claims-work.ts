@@ -9,6 +9,8 @@ import {
   claimImpact,
   financialFact,
   replacementProposal,
+  reportWarning,
+  researchReport,
   sourceDocument,
   sourceLocator,
   toolCall,
@@ -285,6 +287,7 @@ export async function submitVerification(ctx: ActorContext, input: VerificationI
     } else {
       await tx.update(challenge).set({ status: "RESOLVED", resolution: `Superseded by verified proposal ${proposal.id}`, resolvedAt: new Date() }).where(and(eq(challenge.caseId, caseRow.id), eq(challenge.status, "OPEN"), sql`${challenge.targetId} in (select id::text from replacement_proposal where claim_id = ${c.id})`));
     }
+    if (verified && nextImpact === "UNAFFECTED") await clearCandidateWarning(tx, caseRow.id, impact.reportId, record);
     await record({
       workspaceId: ctx.workspaceId,
       type: verified ? "claim.verified" : "claim.rejected",
@@ -296,6 +299,18 @@ export async function submitVerification(ctx: ActorContext, input: VerificationI
     await recomputeCaseStatus(tx, caseRow.id, record);
     return { verified, attestationId: attestation!.id, checks, challengeId };
   });
+}
+
+/** A note that was only under review is cleared once every claim that put it under review is verified as unaffected. */
+async function clearCandidateWarning(tx: Tx, caseId: string, reportId: string, record: (input: import("./events.js").EventInput) => Promise<unknown>): Promise<void> {
+  const remaining = await tx.select({ state: claimImpact.state }).from(claimImpact).where(and(eq(claimImpact.caseId, caseId), eq(claimImpact.reportId, reportId)));
+  if (remaining.some((r) => r.state !== "UNAFFECTED")) return;
+  const report = await tx.query.researchReport.findFirst({ where: eq(researchReport.id, reportId) });
+  if (!report?.currentRevisionId) return;
+  await tx.update(reportWarning).set({ state: "RESOLVED", resolvedAt: new Date() }).where(and(eq(reportWarning.caseId, caseId), eq(reportWarning.reportId, reportId), eq(reportWarning.state, "ACTIVE")));
+  const stillActive = await tx.$count(reportWarning, and(eq(reportWarning.revisionId, report.currentRevisionId), eq(reportWarning.state, "ACTIVE")));
+  if (!stillActive) await tx.update(researchReport).set({ reliability: "CLEAR", updatedAt: new Date(), rowVersion: report.rowVersion + 1 }).where(eq(researchReport.id, report.id));
+  await record({ workspaceId: report.workspaceId, type: "report.warning_cleared", actor: { kind: "system", id: "case-engine" }, caseId, payload: { reportId, reason: "Every claim under review was verified as not relying on the affected figures" } });
 }
 
 export async function raiseChallenge(ctx: ActorContext, input: { caseId: string; targetKind: string; targetId: string; reasonCode: string; explanation: string; refs: string[] }) {
